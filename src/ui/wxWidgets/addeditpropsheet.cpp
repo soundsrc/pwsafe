@@ -1169,12 +1169,15 @@ void AddEditPropSheet::OnOk(wxCommandEvent& /* evt */)
       m_item.GetXTimeInt(lastXTimeInt);
       time_t lastXtime;
       m_item.GetXTime(lastXtime);
+
+      StringX notes = tostringx(m_notes);
+
       // Following ensures that untouched & hidden note
       // isn't marked as modified. Relies on fact that
       // Note field can't be modified w/o first getting focus
       // and that we turn off m_isNotesHidden when that happens.
       if (m_type != ADD && m_isNotesHidden)
-        m_notes = m_item.GetNotes().c_str();
+        notes = tostringx(m_item.GetNotes().c_str());
 
       // Create a new PWHistory string based on settings in this dialog, and compare it
       // with the PWHistory string from the item being edited, to see if the user modified it.
@@ -1224,7 +1227,7 @@ void AddEditPropSheet::OnOk(wxCommandEvent& /* evt */)
       bIsModified = (group        != m_item.GetGroup().c_str()       ||
                      m_title      != m_item.GetTitle().c_str()       ||
                      m_user       != m_item.GetUser().c_str()        ||
-                     m_notes      != m_item.GetNotes().c_str()       ||
+                     notes        != m_item.GetNotes()               ||
                      m_url        != m_item.GetURL().c_str()         ||
                      m_email      != m_item.GetEmail().c_str()       ||
                      m_autotype   != m_item.GetAutoType().c_str()    ||
@@ -1246,7 +1249,7 @@ void AddEditPropSheet::OnOk(wxCommandEvent& /* evt */)
         m_item.SetUser(m_user.empty() ?
                        PWSprefs::GetInstance()->
                        GetPref(PWSprefs::DefaultUsername).c_str() : m_user.c_str());
-        m_item.SetNotes(tostringx(m_notes));
+        m_item.SetNotes(notes);
         m_item.SetURL(tostringx(m_url));
         m_item.SetEmail(tostringx(m_email));
         m_item.SetAutoType(tostringx(m_autotype));
