@@ -21,6 +21,10 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		354B08DF1D32363F00DA637B /* Yubikey-button.xpm in Resources */ = {isa = PBXBuildFile; fileRef = 354B08DE1D32363C00DA637B /* Yubikey-button.xpm */; };
+		354B08E01D32364900DA637B /* YubiMixin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 354B08DA1D3235C400DA637B /* YubiMixin.cpp */; };
+		354B08E11D32364C00DA637B /* yubicfg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 354B08D81D3235C400DA637B /* yubicfg.cpp */; };
+		354B08E51D3236AC00DA637B /* PWYubi.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 354B08E21D3236A500DA637B /* PWYubi.cpp */; };
 		A2D181461C8FF86C0018AE03 /* media.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A2D181451C8FF86C0018AE03 /* media.cpp */; };
 		A2FE25801C5ACEFD00210C36 /* AES.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A2FE257E1C5ACEFD00210C36 /* AES.cpp */; };
 		A2FE258D1C5ACF7500210C36 /* Item.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A2FE25811C5ACF7500210C36 /* Item.cpp */; };
@@ -177,6 +181,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		354B08D81D3235C400DA637B /* yubicfg.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = yubicfg.cpp; path = ../src/ui/wxWidgets/yubicfg.cpp; sourceTree = "<group>"; };
+		354B08D91D3235C400DA637B /* yubicfg.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = yubicfg.h; path = ../src/ui/wxWidgets/yubicfg.h; sourceTree = "<group>"; };
+		354B08DA1D3235C400DA637B /* YubiMixin.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = YubiMixin.cpp; path = ../src/ui/wxWidgets/YubiMixin.cpp; sourceTree = "<group>"; };
+		354B08DB1D3235C400DA637B /* YubiMixin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = YubiMixin.h; path = ../src/ui/wxWidgets/YubiMixin.h; sourceTree = "<group>"; };
+		354B08DE1D32363C00DA637B /* Yubikey-button.xpm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = "Yubikey-button.xpm"; path = "../src/ui/wxWidgets/graphics/Yubikey-button.xpm"; sourceTree = "<group>"; };
+		354B08E21D3236A500DA637B /* PWYubi.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = PWYubi.cpp; path = ../src/os/unix/PWYubi.cpp; sourceTree = "<group>"; };
+		354B08E31D3236A500DA637B /* PWYubi.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = PWYubi.h; path = ../src/os/unix/PWYubi.h; sourceTree = "<group>"; };
 		A2D181451C8FF86C0018AE03 /* media.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = media.cpp; sourceTree = "<group>"; };
 		A2FE257E1C5ACEFD00210C36 /* AES.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AES.cpp; sourceTree = "<group>"; };
 		A2FE257F1C5ACEFD00210C36 /* AES.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AES.h; sourceTree = "<group>"; };
@@ -679,6 +690,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		354B08D71D32358A00DA637B /* yubikey */ = {
+			isa = PBXGroup;
+			children = (
+				354B08E21D3236A500DA637B /* PWYubi.cpp */,
+				354B08E31D3236A500DA637B /* PWYubi.h */,
+				354B08DE1D32363C00DA637B /* Yubikey-button.xpm */,
+				354B08D81D3235C400DA637B /* yubicfg.cpp */,
+				354B08D91D3235C400DA637B /* yubicfg.h */,
+				354B08DA1D3235C400DA637B /* YubiMixin.cpp */,
+				354B08DB1D3235C400DA637B /* YubiMixin.h */,
+			);
+			name = yubikey;
+			sourceTree = "<group>";
+		};
 		E6069D0319FE1CCA0055040F /* Configs */ = {
 			isa = PBXGroup;
 			children = (
@@ -1019,6 +1044,7 @@
 				E6EE839111E87E9700B01518 /* core */,
 				E6EE837D11E87CD200B01518 /* os */,
 				E6ADB9A411957099004E2BE5 /* wxWidgets */,
+				354B08D71D32358A00DA637B /* yubikey */,
 				E6ADB80411956A93004E2BE5 /* Products */,
 				E69B800911F61CF20084F6C4 /* Carbon.framework */,
 				E6B1448112B26CEE00415AAE /* OpenGL.framework */,
@@ -1441,6 +1467,7 @@
 			files = (
 				E690B55F12984A1B007EA508 /* pwsafe_filter.xsd in Resources */,
 				E690B56012984A1B007EA508 /* pwsafe.xsd in Resources */,
+				354B08DF1D32363F00DA637B /* Yubikey-button.xpm in Resources */,
 				E690B56112984A1B007EA508 /* pwsafe.xsl in Resources */,
 				E690B95712984B1D007EA508 /* helpEN.zip in Resources */,
 				E6919C641298FB25001F96D9 /* pwsafe.icns in Resources */,
@@ -1617,6 +1644,7 @@
 				E6BA47871216DB9C00193879 /* AdvancedSelectionDlg.cpp in Sources */,
 				E6BA47881216DB9C00193879 /* ExportTextWarningDlg.cpp in Sources */,
 				E6BA47891216DB9C00193879 /* SafeCombinationCtrl.cpp in Sources */,
+				354B08E11D32364C00DA637B /* yubicfg.cpp in Sources */,
 				E6BA478A1216DB9C00193879 /* ViewReport.cpp in Sources */,
 				E6B5C6451232B3D000AC8B45 /* dragbar.cpp in Sources */,
 				E6B5C6461232B3D000AC8B45 /* PWSDragBar.cpp in Sources */,
@@ -1630,10 +1658,12 @@
 				E66FB84D13ACA5C3004DBB97 /* SizeRestrictedPanel.cpp in Sources */,
 				E691FB5A140D551F00925F96 /* fieldselectionpanel.cpp in Sources */,
 				E6D17CEE1411156D003BDBE7 /* fieldselectiondlg.cpp in Sources */,
+				354B08E51D3236AC00DA637B /* PWYubi.cpp in Sources */,
 				E6651E9C14E914320057D8EC /* pwsmenushortcuts.cpp in Sources */,
 				E66C16A416731E2100C996B1 /* SelectionCriteria.cpp in Sources */,
 				E66C16AB16731ECD00C996B1 /* mainManage.cpp in Sources */,
 				E6F8DC1F1D132618007DFBEC /* mainView.cpp in Sources */,
+				354B08E01D32364900DA637B /* YubiMixin.cpp in Sources */,
 				E66C16B316731EFE00C996B1 /* ManagePwdPolicies.cpp in Sources */,
 				E66C16BB16731F9400C996B1 /* PasswordPolicy.cpp in Sources */,
 			);
@@ -1690,7 +1720,6 @@
 				CLANG_CXX_LIBRARY = "libc++";
 				ENABLE_TESTABILITY = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
-					NO_YUBI,
 					UNICODE,
 					"_FILE_OFFSET_BITS=64",
 					_LARGE_FILES,
@@ -1811,7 +1840,6 @@
 					__WXOSX_COCOA__,
 					DEBUG,
 					_DEBUG,
-					NO_YUBI,
 				);
 				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
 				INFOPLIST_FILE = pwsafe.plist;
@@ -1834,7 +1862,6 @@
 					__WXMAC__,
 					__WXOSX_COCOA__,
 					NDEBUG,
-					NO_YUBI,
 					"wxDEBUG_LEVEL=0",
 				);
 				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
