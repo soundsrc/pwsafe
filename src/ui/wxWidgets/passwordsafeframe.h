@@ -388,6 +388,10 @@ public:
   void OnRestoreSafe(wxCommandEvent& evt);
   
   void OnVisitWebsite(wxCommandEvent&);
+  
+#ifdef __WXOSX__
+  void OnActivate(wxActivateEvent& event);
+#endif
 
 ////@begin PasswordSafeFrame member function declarations
 

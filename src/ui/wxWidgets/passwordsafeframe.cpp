@@ -201,6 +201,9 @@ BEGIN_EVENT_TABLE( PasswordSafeFrame, wxFrame )
   EVT_MENU(ID_VISITWEBSITE, PasswordSafeFrame::OnVisitWebsite)
 
   EVT_ICONIZE(PasswordSafeFrame::OnIconize)
+#ifdef __WXOSX__
+  EVT_ACTIVATE(PasswordSafeFrame::OnActivate)
+#endif
 
   EVT_UPDATE_UI(wxID_SAVE,          PasswordSafeFrame::OnUpdateUI )
   EVT_UPDATE_UI(ID_ADDGROUP,        PasswordSafeFrame::OnUpdateUI )
@@ -3268,6 +3271,17 @@ void PasswordSafeFrame::OnVisitWebsite(wxCommandEvent&)
 {
   wxLaunchDefaultBrowser("https://pwsafe.org");
 }
+
+#ifdef __WXOSX__
+void PasswordSafeFrame::OnActivate(wxActivateEvent& event)
+{
+  if(event.GetActive()) {
+    if(m_sysTray->IsLocked()) {
+      UnlockSafe(true, false);
+    }
+  }
+}
+#endif
 
 void PasswordSafeFrame::UpdateStatusBar()
 {
