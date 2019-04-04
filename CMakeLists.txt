@@ -5,9 +5,24 @@ else (WIN32)
 endif (WIN32)
 project (passwordsafe CXX C)
 
+if (POLICY CMP0069)
+  cmake_policy(SET CMP0069 NEW)
+endif (POLICY CMP0069)
+
 # prerequisites
 include(CheckLibraryExists)
 include(CheckIncludeFile)
+
+# IPO = interprocedural optimisation, not initial public offering (unfortunately)
+include(CheckIPOSupported OPTIONAL RESULT_VARIABLE CHECK_IPO_FOUND)
+if (${CHECK_IPO_FOUND} STREQUAL "NOTFOUND")
+else (${CHECK_IPO_FOUND} STREQUAL "NOTFOUND")
+  check_ipo_supported(RESULT IPO_SUPPORTED)
+endif (${CHECK_IPO_FOUND} STREQUAL "NOTFOUND")
+
+if (NOT WIN32)
+include(FindUnixCommands)
+endif (NOT WIN32)
 
 # Version configuration:
 # version.mfc for Windows MFC build, version.wx for all the rest
@@ -18,6 +33,19 @@ include(CheckIncludeFile)
 # VER_SPECIAL = text [or not set]
 # where VER_MAJOR and VER_MINOR are mandatory, and all except
 # VER_SPECIAL must be integers
+
+# Find out what linux distro we're on... currently only used for 
+# debian based distros
+find_program(LSB_RELEASE_EXECUTABLE lsb_release
+  DOC "Linux Standard Base and Distribution command line query client")
+mark_as_advanced(LSB_RELEASE_EXECUTABLE)
+
+if (LSB_RELEASE_EXECUTABLE)
+  execute_process(COMMAND ${LSB_RELEASE_EXECUTABLE} -is
+    OUTPUT_VARIABLE LSB_RELEASE_ID_SHORT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+endif()
 
 if (WIN32 AND NOT WX_WINDOWS)
    set (VERSION_FILE "${PROJECT_SOURCE_DIR}/version.mfc")
@@ -62,6 +90,8 @@ endif (pwsafe_REVISION)
 
 # Configurable options:
 option (NO_YUBI "Set ON to disable YubiKey support" OFF)
+option (NO_GTEST "Set ON to disable gtest unit testing" OFF)
+
 if (WIN32)
   option (WX_WINDOWS "Build wxWidget under Windows" OFF)
   if (WX_WINDOWS)
@@ -84,14 +114,18 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  set (GTEST_ROOT "/usr/src/gtest/build"
-    CACHE PATH "The root directory of the gtest install prefix")
+  option (NO_QR "Set ON to disable QR support" OFF)
+  if (NOT NO_QR)
+    CHECK_INCLUDE_FILE("qrencode.h" HAVE_LIBQRENCODE_DEV)
+    if(NOT HAVE_LIBQRENCODE_DEV)
+      unset(HAVE_LIBQRENCODE_DEV CACHE)
+      message( FATAL_ERROR "libqrencode-dev(el) not installed: install or select NO_QR")
+    endif(NOT HAVE_LIBQRENCODE_DEV)
+  else (NOT NO_QR)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNO_QR")
+  endif (NOT NO_QR)
 else(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  set (GTEST_MSVC_SEARCH "MT")
-  set (GTEST_ROOT ""
-    CACHE PATH "The root directory of the gtest install prefix")
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-find_package(GTest REQUIRED)
 
 if (NOT WIN32 OR WX_WINDOWS)
   if (NOT WIN32)
@@ -108,9 +142,15 @@ if (NOT WIN32 OR WX_WINDOWS)
   endif (NOT WIN32)
   find_package(wxWidgets COMPONENTS adv base core html net REQUIRED)
   include(${wxWidgets_USE_FILE})
+
+  find_package(OpenSSL REQUIRED)
+  include_directories(${OPENSSL_INCLUDE_DIR})
 endif (NOT WIN32 OR WX_WINDOWS)
 
 if (NOT WIN32)
+    if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+      set( CMAKE_REQUIRED_INCLUDES "/usr/local/include" )
+    endif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
   CHECK_INCLUDE_FILE("uuid/uuid.h" UUID_H)
   if (NOT UUID_H)
     message(FATAL_ERROR
@@ -165,8 +205,6 @@ enable_testing()
 
 # Common configurations
 
-
-include_directories (${GTEST_INCLUDE_DIRS})
 include_directories (${PROJECT_SOURCE_DIR}/src/os)
 include_directories (${PROJECT_SOURCE_DIR}/src/core)
 include_directories (${PROJECT_BINARY_DIR})
@@ -195,7 +233,7 @@ set_property (GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(CMAKE_CXX_FLAGS
   "${CMAKE_CXX_FLAGS} /MP /GS /analyze- /W4 /Gy /Zc:wchar_t /Zi /Gm-
-  /O2 /Ob1 /fp:precise /D WIN32 /D _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES=1 /D _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES_COUNT=1 /D WINVER=0x0501 /D _USING_V110_SDK71_ /D UNICODE /D _UNICODE /GF /WX- /Zc:forScope /arch:IA32 /RTC1 /Gd /Oy-")
+  /Ob1 /fp:precise /D WIN32 /D _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES=1 /D _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES_COUNT=1 /D WINVER=0x0601 /D _USING_V110_SDK71_ /D UNICODE /D _UNICODE /GF /WX- /Zc:forScope /RTC1 /Gd /Oy-")
 
 if (NO_YUBI)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNO_YUBI")
@@ -219,6 +257,34 @@ if (USE_ASAN)
     "${CMAKE_CXX_FLAGS_DEBUG} -gdwarf-4 -O0 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize=address")
 endif (USE_ASAN)
 endif (MSVC)
+
+if (NOT NO_GTEST)
+   # Download and unpack googletest at configure time
+   # See https://crascit.com/2015/07/25/cmake-gtest/
+   configure_file(Misc/CMakeLists.gtest.txt.in googletest-download/CMakeLists.txt)
+   execute_process(COMMAND "${CMAKE_COMMAND}" -G "${CMAKE_GENERATOR}" .
+       WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/googletest-download" )
+   execute_process(COMMAND "${CMAKE_COMMAND}" --build .
+       WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/googletest-download" )
+
+   # Prevent GoogleTest from overriding our compiler/linker options
+   # when building with Visual Studio
+   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+   # Set some other gtest configurations:
+   set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+   set(BUILD_GTEST ON CACHE BOOL "" FORCE)
+   set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+
+   # Add googletest directly to our build. This adds
+   # the following targets: gtest, gtest_main, gmock
+   # and gmock_main
+   add_subdirectory("${CMAKE_BINARY_DIR}/googletest-src"
+                    "${CMAKE_BINARY_DIR}/googletest-build")
+
+   include_directories("${gtest_SOURCE_DIR}/include"
+#                       "${gmock_SOURCE_DIR}/include"
+                       )
+endif(NOT NO_GTEST)
 
 if (WIN32 AND NOT WX_WINDOWS)
   set(VERSION_IN "${PROJECT_SOURCE_DIR}/src/ui/Windows/version.in")
@@ -254,7 +320,9 @@ endif (WIN32)
 
 add_subdirectory (src/os) # os-specific library
 add_subdirectory (src/core) # core library
-add_subdirectory (src/test) # tests (gtest framework)
+if (NOT NO_GTEST)
+   add_subdirectory (src/test) # tests (gtest framework)
+endif(NOT NO_GTEST)
 add_subdirectory (help) # online help
 if (WIN32 AND NOT WX_WINDOWS)
   add_subdirectory (src/ui/Windows)
@@ -276,7 +344,11 @@ else()
 endif()
 
 if (NOT WIN32)
-   add_executable(pwsafe ${PWSAFE_SRCS})
+  add_executable(pwsafe ${PWSAFE_SRCS})
+  if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  # squash lintian hardening-no-relro warning, probably good for all Linuxen
+  set_target_properties(pwsafe PROPERTIES LINK_FLAGS "-z relro")
+endif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 else (NOT WIN32)
    add_executable(pwsafe WIN32 ${PWSAFE_SRCS})
    if (NOT WX_WINDOWS)
@@ -291,46 +363,54 @@ else (NOT WIN32)
 #                            LINK_FLAGS "/ENTRY:\"wWinMainCRTStartup\"")
    endif (NOT WX_WINDOWS)
 endif (NOT WIN32)
-set_property(TARGET pwsafe PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE True)
 target_link_libraries(pwsafe core os)
 if (XML_XERCESC)
   target_link_libraries(pwsafe ${XercesC_LIBRARY})
 endif (XML_XERCESC)
 
 if (APPLE)
-    target_link_libraries(pwsafe ${wxWidgets_LIBRARIES} ${CMAKE_REQUIRED_LIBRARIES})
+    FIND_LIBRARY(QUARTZCORE_LIBS QuartzCore)
+    target_link_libraries(pwsafe ${wxWidgets_LIBRARIES} ${CMAKE_REQUIRED_LIBRARIES} ${QUARTZCORE_LIBS} curl ${OPENSSL_SSL_LIBRARY})
 elseif (WIN32)
   if (NOT NO_YUBI)
    set (YUBILIB "YkLib22")
   endif ()
   target_link_libraries(pwsafe ${wxWidgets_LIBRARIES} 
-      ${YUBILIB} ${PWS_DLL_LIBS} version Rpcrt4 htmlhelp SetupAPI Hid
-      Dbghelp Urlmon ${MSXML_LIB} ${CMAKE_REQUIRED_LIBRARIES})
+      ${YUBILIB} ${PWS_DLL_LIBS} version Rpcrt4 htmlhelp SetupAPI Hid usp10
+      Dbghelp Urlmon gdiplus ${MSXML_LIB} ${CMAKE_REQUIRED_LIBRARIES})
 else ()
-  target_link_libraries(pwsafe ${wxWidgets_LIBRARIES} uuid Xtst X11
+  if (NOT NO_QR)
+    target_link_libraries(pwsafe qrencode  ${CMAKE_REQUIRED_LIBRARIES})
+  endif (NOT NO_QR)
+  target_link_libraries(pwsafe ${wxWidgets_LIBRARIES} uuid Xtst X11 curl ${OPENSSL_SSL_LIBRARY}
   ${CMAKE_REQUIRED_LIBRARIES})
 endif()
+
+if (IPO_SUPPORTED)
+  set_property(TARGET pwsafe PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE True)
+endif (IPO_SUPPORTED)
 
 # Installation stuff (for 'make install', but mainly for 'make package')
 install (TARGETS pwsafe RUNTIME DESTINATION "bin")
 
 
 if (NOT WIN32)
-   install (DIRECTORY xml DESTINATION "share/pwsafe/")
-   install (FILES "docs/pwsafe.1" DESTINATION "share/man/man1") # gzip'ed in postinst
-   install (FILES "install/desktop/pwsafe.desktop" DESTINATION "share/pwsafe")
-   install (FILES "install/graphics/pwsafe.png" DESTINATION "share/pwsafe")
+   install (DIRECTORY xml DESTINATION "share/passwordsafe/")
+   ADD_CUSTOM_COMMAND(OUTPUT ${CMAKE_BINARY_DIR}/pwsafe.1.gz
+     COMMAND ${GZIP} ARGS -9 -n -c ${PROJECT_SOURCE_DIR}/docs/pwsafe.1 > pwsafe.1.gz
+		 WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+   ADD_CUSTOM_TARGET(manpage ALL DEPENDS ${CMAKE_BINARY_DIR}/pwsafe.1.gz)
+   install (FILES ${CMAKE_BINARY_DIR}/pwsafe.1.gz DESTINATION "share/man/man1") 
+   install (FILES "install/desktop/pwsafe.desktop" DESTINATION "share/applications")
+   install (FILES "install/graphics/pwsafe.png" DESTINATION "share/pixmaps")
    install (DIRECTORY "${CMAKE_BINARY_DIR}/src/ui/wxWidgets/I18N/mos/"
             DESTINATION "share/locale")
 
-   # Following because "install (DIRECTORY..." copies tree structure, which is not what we
-   # want here. Also "install (TARGETS" doesn't seem to work with custom targets.
-   file (GLOB HELPFILES "help/*.zip")
-   install (FILES ${HELPFILES} DESTINATION "share/doc/passwordsafe/help")
-   # TODO - Install following only if on a Debian system (or if we're building a deb?)
-   install (FILES "install/deb/changelog.Debian" DESTINATION "share/doc/passwordsafe")
-   install (FILES "install/deb/copyright.debian" DESTINATION "share/doc/passwordsafe"
-            RENAME "copyright")
+   install (DIRECTORY ${PROJECT_BINARY_DIR}/help/
+     DESTINATION "share/passwordsafe/help"
+     FILES_MATCHING PATTERN "*.zip"
+     PATTERN "CMakeFiles" EXCLUDE)
+
 else ()
    install (FILES "xml/pwsafe.xsd" DESTINATION "bin")
    install (FILES "xml/pwsafe_filter.xsd" DESTINATION "bin")
@@ -355,21 +435,56 @@ set (CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set (CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/install/description.txt")
 set (CPACK_STRIP_FILES "TRUE")
 
-## Debian-specific:
+if (EXISTS "/etc/debian_version")
+## we are on a debian based distro, but we can't make assumptions about which
+## we will do general deb related setup and relegate deps to specific distros 
+
+ADD_CUSTOM_COMMAND(OUTPUT ${CMAKE_BINARY_DIR}/changelog.Debian.gz
+                   COMMAND /bin/gzip ARGS -9 -n -k 
+	             "${PROJECT_SOURCE_DIR}/install/deb/changelog.Debian"
+	           COMMAND /bin/mv ARGS 
+	             "${PROJECT_SOURCE_DIR}/install/deb/changelog.Debian.gz" 
+	             ${CMAKE_BINARY_DIR}/changelog.Debian.gz)
+
+ADD_CUSTOM_TARGET(changelog ALL DEPENDS ${CMAKE_BINARY_DIR}/changelog.Debian.gz)
+install (FILES ${CMAKE_BINARY_DIR}/changelog.Debian.gz 
+         DESTINATION "share/doc/passwordsafe")
+install (FILES "install/deb/copyright.debian" DESTINATION "share/doc/passwordsafe"
+	RENAME "copyright")
+
 set (CPACK_DEBIAN_PACKAGE_SECTION "utils")
 set (CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set (CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://pwsafe.org/")
 set (CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION "TRUE")
-set (CPACK_DEBIAN_PACKAGE_DEPENDS
-  "libc6 (>= 2.7-18lenny4), libuuid1 (>= 1.41.3-1), libwxgtk3.0-0 (>= 3.0.0-2) | libwxgtk3.0-0v5 (>= 3.0.0-2), libxtst6 (>= 2:1.0.3-1), libxerces-c3.1 (>= 3.1.1-1+b1), libykpers-1-1 (>= 1.3.2-1squeeze1)")
-set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+if (${LSB_RELEASE_ID_SHORT} STREQUAL "Ubuntu")
+	## Ubuntu-specific
+  string(REGEX REPLACE "([0-9]+)\\.([0-9]+)\\.[0-9]+" "\\1.\\2" XercesC_VER ${XercesC_VERSION})
+	set (CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.11.1-0ubuntu7.2), libuuid1 (>= 2.17.2-0ubuntu1), libwxgtk3.0-0v5 (>= 3.0.0-2) | libwxgtk3.0-0 (>= 3.0.0-2), libxtst6 (>= 2:1.1.0-2), libxerces-c${XercesC_VER} (>= 3.1.0-1), libykpers-1-1 (>= 1.7.0-1), libqrencode3 (>= 3.4.4-1)")
+endif (${LSB_RELEASE_ID_SHORT} STREQUAL "Ubuntu")
+
+if (${LSB_RELEASE_ID_SHORT} STREQUAL "Debian")
+	## Debian-specific:
+	set (CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.7-18lenny4), libuuid1 (>= 1.41.3-1), libwxgtk3.0-0 (>= 3.0.0-2) | libwxgtk3.0-0v5 (>= 3.0.0-2), libxtst6 (>= 2:1.0.3-1), libxerces-c3.1 (>= 3.1.1-1+b1), libykpers-1-1 (>= 1.7.0-1), libqrencode3 (>= 3.4.4-1+b2)")
+  set (CPACK_DEBIAN_PACKAGE_RECOMMENDS "xvkbd (>= 3.3-1+b1)")
+endif (${LSB_RELEASE_ID_SHORT} STREQUAL "Debian")
+
+if (${LSB_RELEASE_ID_SHORT} STREQUAL "LinuxMint")
+  ## Debian-specific:
+  set (CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.11.1-0ubuntu7.2), libuuid1 (>= 2.17.2-0ubuntu1), libxtst6 (>= 2:1.1.0-2), libxerces-c3.1 (>= 3.1.0-1)")
+endif (${LSB_RELEASE_ID_SHORT} STREQUAL "LinuxMint")
+
+set (CPACK_DEBIAN_PACKAGE_DESCRIPTION "Password Safe is a password database utility. \n Like many other such  products, commercial and otherwise,\n  it stores your passwords in an encrypted file.")
+
+set (CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA 
   "${CMAKE_CURRENT_SOURCE_DIR}/install/deb/prerm;${CMAKE_CURRENT_SOURCE_DIR}/install/deb/postrm")
+endif (EXISTS "/etc/debian_version")
 
 ## RPM-specific
-set (CPACK_RPM_PACKAGE_REQUIRES "wxBase3, wxGTK3, xerces-c, ykpers")
+set (CPACK_RPM_PACKAGE_REQUIRES "wxBase3, wxGTK3, xerces-c, ykpers, qrencode-libs")
 set (CPACK_RPM_PACKAGE_URL "https://pwsafe.org/")
 set (CPACK_RPM_PACKAGE_LICENSE "Artistic2.0")
 set (CPACK_RPM_PACKAGE_GROUP "Applications/Utils")
+set (CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/usr/share/man" "/usr/share/man/man1" "/usr/share/locale" "/usr/share/locale/da" "/usr/share/locale/da/LC_MESSAGES" "/usr/share/locale/de" "/usr/share/locale/de/LC_MESSAGES" "/usr/share/locale/es" "/usr/share/locale/es/LC_MESSAGES" "/usr/share/locale/fr" "/usr/share/locale/fr/LC_MESSAGES" "/usr/share/locale/it" "/usr/share/locale/it/LC_MESSAGES" "/usr/share/locale/ko" "/usr/share/locale/ko/LC_MESSAGES" "/usr/share/locale/nl" "/usr/share/locale/nl/LC_MESSAGES" "/usr/share/locale/pl" "/usr/share/locale/pl/LC_MESSAGES" "/usr/share/locale/ru" "/usr/share/locale/ru/LC_MESSAGES" "/usr/share/locale/sv" "/usr/share/locale/sv/LC_MESSAGES" "/usr/share/locale/zh" "/usr/share/locale/zh/LC_MESSAGES" "/usr/share/applications" "/usr/share/pixmaps")
 include(CPack)
 ### End of packaging section
 ### End of CMakeLists.txt

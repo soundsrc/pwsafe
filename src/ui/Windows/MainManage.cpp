@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -11,6 +11,7 @@
 //-----------------------------------------------------------------------------
 
 #include "PasswordSafe.h"
+
 #include "ThisMfcApp.h"
 #include "GeneralMsgBox.h"
 #include "Shortcut.h"
@@ -80,7 +81,7 @@ int DboxMain::BackupSafe()
   CString cs_temp, cs_title;
 
   std::wstring dir;
-  if (m_core.GetCurFile().empty())
+  if (!m_core.IsDbOpen())
     dir = PWSdirs::GetSafeDir();
   else {
     std::wstring cdrive, cdir, dontCare;
@@ -88,7 +89,7 @@ int DboxMain::BackupSafe()
     dir = cdrive + cdir;
   }
 
-  //SaveAs-type dialog box
+  // SaveAs-type dialog box
   while (1) {
     CPWFileDialog fd(FALSE,
                      L"bak",
@@ -122,7 +123,7 @@ int DboxMain::BackupSafe()
   rc = m_core.WriteFile(tempname, m_core.GetReadFileVersion(), false);
   if (rc == PWScore::CANT_OPEN_FILE) {
     CGeneralMsgBox gmb;
-    cs_temp.Format(IDS_CANTOPENWRITING, tempname);
+    cs_temp.Format(IDS_CANTOPENWRITING, static_cast<LPCWSTR>(tempname.c_str()));
     cs_title.LoadString(IDS_FILEWRITEERROR);
     gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONWARNING);
     return PWScore::CANT_OPEN_FILE;
@@ -141,22 +142,25 @@ void DboxMain::OnRestoreSafe()
 int DboxMain::RestoreSafe()
 {
   int rc;
-  StringX backup, passkey, temp;
-  StringX currbackup =
+  StringX sx_backup, sx_passkey;
+  StringX sx_currbackup =
     PWSprefs::GetInstance()->GetPref(PWSprefs::CurrentBackup);
 
-  rc = SaveIfChanged();
-  if (rc != PWScore::SUCCESS && rc != PWScore::USER_DECLINED_SAVE)
-    return rc;
-   
-  // Reset changed flag to stop being asked again (only if rc == PWScore::USER_DECLINED_SAVE)
-  SetChanged(Clear);
+  if (m_bOpen) {
+    rc = SaveIfChanged();
+    if (rc != PWScore::SUCCESS && rc != PWScore::USER_DECLINED_SAVE)
+      return rc;
+
+    // Reset changed flag to stop being asked again (only if rc == PWScore::USER_DECLINED_SAVE)
+    if (rc == PWScore::USER_DECLINED_SAVE)
+      m_bUserDeclinedSave = true;
+  }
 
   CString cs_text, cs_temp, cs_title;
   cs_text.LoadString(IDS_PICKRESTORE);
 
   std::wstring dir;
-  if (m_core.GetCurFile().empty())
+  if (!m_core.IsDbOpen())
     dir = PWSdirs::GetSafeDir();
   else {
     std::wstring cdrive, cdir, dontCare;
@@ -168,7 +172,7 @@ int DboxMain::RestoreSafe()
   while (1) {
     CPWFileDialog fd(TRUE,
                      L"bak",
-                     currbackup.c_str(),
+                     sx_currbackup.c_str(),
                      OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_LONGNAMES,
                      CString(MAKEINTRESOURCE(IDS_FDF_BUS)),
                      this);
@@ -188,20 +192,20 @@ int DboxMain::RestoreSafe()
       return PWScore::USER_CANCEL;
     }
     if (rc2 == IDOK) {
-      backup = fd.GetPathName();
+      sx_backup = fd.GetPathName();
       break;
     } else
       return PWScore::USER_CANCEL;
   }
 
-  rc = GetAndCheckPassword(backup, passkey, GCP_NORMAL);  // OK, CANCEL, HELP
+  rc = GetAndCheckPassword(sx_backup, sx_passkey, GCP_NORMAL);  // OK, CANCEL, HELP
 
   CGeneralMsgBox gmb;
   switch (rc) {
     case PWScore::SUCCESS:
       break; // Keep going...
     case PWScore::CANT_OPEN_FILE:
-      cs_temp.Format(IDS_CANTOPEN, backup);
+      cs_temp.Format(IDS_CANTOPEN, static_cast<LPCWSTR>(sx_backup.c_str()));
       cs_title.LoadString(IDS_FILEOPENERROR);
       gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONWARNING);
     case TAR_OPEN:
@@ -220,27 +224,32 @@ int DboxMain::RestoreSafe()
   }
 
   // unlock the file we're leaving
-  if (!m_core.GetCurFile().empty()) {
-    m_core.UnlockFile(m_core.GetCurFile().c_str());
-  }
+  m_core.SafeUnlockCurFile();
 
-  // clear the data before restoring
-  ClearData();
+  // Reset core and clear ALL associated data
+  m_core.ReInit();
+
+  // Clear application data
+  ClearAppData();
 
   // Validate it unless user says NO
   CReport Rpt;
-  rc = m_core.ReadFile(backup, passkey, !m_bNoValidation, MAXTEXTCHARS, &Rpt);
+  rc = m_core.ReadFile(sx_backup, sx_passkey, !m_bNoValidation, MAXTEXTCHARS, &Rpt);
   if (rc == PWScore::CANT_OPEN_FILE) {
-    cs_temp.Format(IDS_CANTOPENREADING, backup);
+    cs_temp.Format(IDS_CANTOPENREADING, static_cast<LPCWSTR>(sx_backup.c_str()));
     cs_title.LoadString(IDS_FILEREADERROR);
     gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONWARNING);
     return PWScore::CANT_OPEN_FILE;
   }
 
   m_core.SetCurFile(L"");    // Force a Save As...
-  m_core.SetDBChanged(true); // So that the restored file will be saved
+  // Rather than set the DB as having been changed to force it to
+  // be saved, use new variable
+  m_bRestoredDBUnsaved = true;
+
   m_titlebar.LoadString(IDS_UNTITLEDRESTORE);
-  app.SetTooltipText(L"PasswordSafe");
+  SetTooltipText(L"PasswordSafe");
+  
   ChangeOkUpdate();
   RefreshViews();
 
@@ -256,14 +265,21 @@ void DboxMain::OnOptions()
   // Get old DB preferences String value for use later
   const StringX sxOldDBPrefsString(prefs->Store());
 
+  // Save current Window transparency in case we have to change it
+  const BYTE byteOldPercentTransparency = (BYTE)prefs->GetPref(PWSprefs::WindowTransparency);
+  const bool bOldTransparancyEnabled = prefs->GetPref(PWSprefs::EnableWindowTransparency);
+
   // Save Hotkey info
   BOOL bAppHotKeyEnabled;
-  int32 iPWSHotKeyValue = int32(prefs->GetPref(PWSprefs::HotKey));
+  int32 iAppHotKeyValue = int32(prefs->GetPref(PWSprefs::HotKey));
   // Can't be enabled if not set!
-  if (iPWSHotKeyValue == 0)
+  if (iAppHotKeyValue == 0)
     bAppHotKeyEnabled = FALSE;
   else
     bAppHotKeyEnabled = prefs->GetPref(PWSprefs::HotKeyEnabled) ? TRUE : FALSE;
+
+  // Get current status of how the user wants to the initial display
+  bool bTreeOpenStatus = prefs->GetPref(PWSprefs::TreeDisplayStatusAtOpen) != PWSprefs::AsPerLastSave;
 
   // Disable Hotkey around this as the user may press the current key when 
   // selecting the new key!
@@ -296,7 +312,7 @@ void DboxMain::OnOptions()
     // Get updated Hotkey information as we will either re-instate the original or
     // set these new values
     bAppHotKeyEnabled = pOptionsPS->GetHotKeyState();
-    iPWSHotKeyValue = pOptionsPS->GetHotKeyValue();
+    iAppHotKeyValue = pOptionsPS->GetHotKeyValue();
 
     // Update status bar
     UINT uiMessage(IDSC_STATCOMPANY);
@@ -325,18 +341,14 @@ void DboxMain::OnOptions()
         uiMessage = IDSC_STATCOMPANY;
     }
     statustext[CPWStatusBar::SB_DBLCLICK] = uiMessage;
-    m_statusBar.SetIndicators(statustext, CPWStatusBar::SB_TOTAL);
+    m_StatusBar.SetIndicators(statustext, CPWStatusBar::SB_TOTAL);
     UpdateStatusBar();
+
     // Make a sunken or recessed border around the first pane
-    m_statusBar.SetPaneInfo(CPWStatusBar::SB_DBLCLICK,
-                            m_statusBar.GetItemID(CPWStatusBar::SB_DBLCLICK),
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_DBLCLICK,
+                            m_StatusBar.GetItemID(CPWStatusBar::SB_DBLCLICK),
                             SBPS_STRETCH, NULL);
 
-    int iTrayColour = pOptionsPS->GetTrayIconColour();
-    app.SetClosedTrayIcon(iTrayColour);
-
-    UpdateSystemMenu();
-    
     if (pOptionsPS->GetMaxMRUItems() == 0)
       app.ClearMRU();  // Clear any currently saved
     
@@ -384,59 +396,57 @@ void DboxMain::OnOptions()
       }
     }
 
+    m_ctlItemList.SetHighlightChanges(pOptionsPS->HighlightChanges() &&
+      !pOptionsPS->SaveImmediately());
+    m_ctlItemTree.SetHighlightChanges(pOptionsPS->HighlightChanges() &&
+      !pOptionsPS->SaveImmediately());
+
     if (pOptionsPS->RefreshViews()) {
-      m_ctlItemList.SetHighlightChanges(pOptionsPS->HighlightChanges());
-      m_ctlItemTree.SetHighlightChanges(pOptionsPS->HighlightChanges());
       RefreshViews();
     }
-
-    if (pOptionsPS->SaveGroupDisplayState())
-      SaveGroupDisplayState();
 
     if (pOptionsPS->UpdateShortcuts()) {
       // Create vector of shortcuts for user's config file
       std::vector<st_prefShortcut> vShortcuts;
-      MapMenuShortcutsIter iter, iter_entry;
+      MapMenuShortcutsIter iter, iter_entry, iter_parent;
       m_MapMenuShortcuts = pOptionsPS->GetMaps();
 
       for (iter = m_MapMenuShortcuts.begin(); iter != m_MapMenuShortcuts.end();
            iter++) {
         // User should not have these sub-entries in their config file
         if (iter->first == ID_MENUITEM_GROUPENTER  ||
-            iter->first == ID_MENUITEM_VIEW        || 
+            iter->first == ID_MENUITEM_VIEWENTRY   || 
             iter->first == ID_MENUITEM_DELETEENTRY ||
             iter->first == ID_MENUITEM_DELETEGROUP ||
             iter->first == ID_MENUITEM_RENAMEENTRY ||
             iter->first == ID_MENUITEM_RENAMEGROUP) {
           continue;
         }
+
         // Now only those different from default
         if (iter->second.siVirtKey  != iter->second.siDefVirtKey  ||
-            iter->second.cModifier != iter->second.cDefModifier) {
+            iter->second.cPWSModifier != iter->second.cDefPWSModifier) {
+          iter_parent = m_MapMenuShortcuts.find(iter->second.uiParentID);
+          std::wstring name(L"");
+          do {
+            name = iter_parent->second.name + std::wstring(L"->") + name;
+            iter_parent = m_MapMenuShortcuts.find(iter_parent->second.uiParentID);
+          } while (iter_parent != m_MapMenuShortcuts.end());
+
+          name += iter->second.name;
+          Remove(name, L'&');
+
           st_prefShortcut stxst;
           stxst.id = iter->first;
           stxst.siVirtKey = iter->second.siVirtKey;
-          stxst.cModifier = iter->second.cModifier;
+          stxst.cPWSModifier = iter->second.cPWSModifier;
+          stxst.Menu_Name = name;
           vShortcuts.push_back(stxst);
         }
       }
 
-      // We need to convert from MFC HotKey modifiers to PWS modifiers
-      for (size_t i = 0; i < vShortcuts.size(); i++) {
-        WORD wHKModifiers = vShortcuts[i].cModifier;
-        // Translate from CHotKeyCtrl to PWS modifiers
-        WORD wPWSModifiers = ConvertModifersMFC2PWS(wHKModifiers);
-        vShortcuts[i].cModifier = (unsigned char)wPWSModifiers;
-      }
-
       prefs->SetPrefShortcuts(vShortcuts);
       prefs->SaveShortcuts();
-
-      // Set up the shortcuts based on the main entry
-      // for View, Delete and Rename
-      iter = m_MapMenuShortcuts.find(ID_MENUITEM_EDIT);
-      iter_entry = m_MapMenuShortcuts.find(ID_MENUITEM_VIEW);
-      iter_entry->second.SetKeyFlags(iter->second);
 
       SetupSpecialShortcuts();
 
@@ -452,11 +462,11 @@ void DboxMain::OnOptions()
       if (prefs->GetPref(PWSprefs::HideSystemTray) && 
           prefs->GetPref(PWSprefs::HotKeyEnabled) &&
           prefs->GetPref(PWSprefs::HotKey) > 0)
-        app.HideIcon();
-      else if (app.IsIconVisible() == FALSE)
-        app.ShowIcon();
+        HideIcon();
+      else if (IsIconVisible() == FALSE)
+        ShowIcon();
     } else {
-      app.HideIcon();
+      HideIcon();
     }
 
     if (pOptionsPS->CheckExpired()) {
@@ -477,8 +487,17 @@ void DboxMain::OnOptions()
     // in this session with this database, until the database is closed.
     Command *pcmd;
 
-    if (m_core.GetReadFileVersion() == PWSfile::VCURRENT) {
-      if (sxOldDBPrefsString != sxNewDBPrefsString) {
+    // Save current horizontal scroll bar position in case view is refreshed
+    if (m_ctlItemList.GetItemCount() == 0) {
+      m_iListHBarPos = m_iTreeHBarPos = 0;
+    } else {
+      m_iListHBarPos = m_ctlItemList.GetScrollPos(SB_HORZ);
+      m_iTreeHBarPos = m_ctlItemTree.GetScrollPos(SB_HORZ);
+    }
+
+    if (m_core.GetReadFileVersion() >= PWSfile::V30) { // older versions don't have prefs
+      if (sxOldDBPrefsString != sxNewDBPrefsString ||
+          m_core.GetHashIters() != pOptionsPS->GetHashIters()) {
         // Determine whether Tree needs redisplaying due to change
         // in what is shown (e.g. usernames/passwords)
         bool bUserDisplayChanged = pOptionsPS->UserDisplayChanged();
@@ -492,8 +511,9 @@ void DboxMain::OnOptions()
                                                   UpdateGUICommand::GUI_DB_PREFERENCES_CHANGED);
           pmulticmds->Add(pcmd);
         }
-        pcmd = DBPrefsCommand::Create(&m_core, sxNewDBPrefsString);
+        pcmd = DBPrefsCommand::Create(&m_core, sxNewDBPrefsString, pOptionsPS->GetHashIters());
         pmulticmds->Add(pcmd);
+
         if (bNeedGUITreeUpdate) {
           pcmd = UpdateGUICommand::Create(&m_core,
                                                   UpdateGUICommand::WN_EXECUTE_REDO,
@@ -501,12 +521,19 @@ void DboxMain::OnOptions()
           pmulticmds->Add(pcmd);
         }
       }
-    }
+
+      // Save group display if the user has switched to Explorer mode or
+      // has changed the TreeDisplayStatusAtOpen to AsPerLastSave
+      if (pOptionsPS->SaveGroupDisplayState() ||
+        (!bTreeOpenStatus &&
+          prefs->GetPref(PWSprefs::TreeDisplayStatusAtOpen, true) == PWSprefs::AsPerLastSave)) {
+        SaveGroupDisplayState();
+      }
+    } // file version check
 
     const int iAction = pOptionsPS->GetPWHAction();
     const int new_default_max = pOptionsPS->GetPWHistoryMax();
     size_t ipwh_exec(0);
-    int num_altered(0);
 
     if (iAction != 0) {
       pcmd = UpdateGUICommand::Create(&m_core,
@@ -526,74 +553,84 @@ void DboxMain::OnOptions()
     }
 
     // If DB preferences changed and/or password history options
-    if (pmulticmds != NULL) {
-      if (pmulticmds->GetSize() > 0) {
-        Execute(pmulticmds);
-        if (ipwh_exec > 0) {
-          // We did do PWHistory update
-          if (pmulticmds->GetRC(ipwh_exec, num_altered)) {
-            UINT uimsg_id(0);
-            switch (iAction) {
-              case -1:   // reset off - include protected entries
-              case  1:   // reset off - exclude protected entries
-                uimsg_id = IDS_ENTRIESCHANGEDSTOP;
-                break;
-              case -2:   // reset on - include protected entries
-              case  2:   // reset on - exclude protected entries
-                uimsg_id = IDS_ENTRIESCHANGEDSAVE;
-                break;
-              case -3:   // setmax - include protected entries
-              case  3:   // setmax - exclude protected entries
-                uimsg_id = IDS_ENTRIESRESETMAX;
-                break;
-              case -4:   // clearall - include protected entries
-              case  4:   // clearall - exclude protected entries
-                uimsg_id = IDS_ENTRIESCLEARALL;
-                break;
-              default:
-                ASSERT(0);
-                break;
-            } // switch (iAction)
+    int num_altered(0);
+    if (!pmulticmds->IsEmpty()) {
+      // Do it
+      Execute(pmulticmds);
 
-            if (uimsg_id > 0) {
-              CGeneralMsgBox gmb;
-              CString cs_Msg;
-              cs_Msg.Format(uimsg_id, num_altered);
-              gmb.AfxMessageBox(cs_Msg);
-            }
+      if (ipwh_exec > 0) {
+        // We did PWHistory update
+        if (pmulticmds->GetRC(ipwh_exec, num_altered)) {
+          UINT uimsg_id(0);
+          switch (iAction) {
+          case PWHist::STOP_INCL_PROT:   // reset off - include protected entries
+          case PWHist::STOP_EXCL_PROT:   // reset off - exclude protected entries
+            uimsg_id = IDS_ENTRIESCHANGEDSTOP;
+            break;
+          case PWHist::START_INCL_PROT:   // reset on - include protected entries
+          case PWHist::START_EXCL_PROT:   // reset on - exclude protected entries
+            uimsg_id = IDS_ENTRIESCHANGEDSAVE;
+            break;
+          case PWHist::SETMAX_INCL_PROT:   // setmax - include protected entries
+          case PWHist::SETMAX_EXCL_PROT:   // setmax - exclude protected entries
+            uimsg_id = IDS_ENTRIESRESETMAX;
+            break;
+          case PWHist::CLEAR_INCL_PROT:   // clearall - include protected entries
+          case PWHist::CLEAR_EXCL_PROT:   // clearall - exclude protected entries
+            uimsg_id = IDS_ENTRIESCLEARALL;
+            break;
+          default:
+            ASSERT(0);
+            break;
+          } // switch (iAction)
+
+          if (uimsg_id > 0) {
+            CGeneralMsgBox gmb;
+            CString cs_Msg;
+            cs_Msg.Format(uimsg_id, num_altered);
+            gmb.AfxMessageBox(cs_Msg);
           }
-        } 
-      } else {
-        // Was created but no commands added in the end.
-        delete pmulticmds;
-      }
-    }
+        }
 
-    if (m_core.HaveDBPrefsChanged() || num_altered > 0) {
-      if (m_core.HaveDBPrefsChanged())
-        SetChanged(DBPrefs);
-      if (num_altered > 0)
-        SetChanged(Data);
-      
-      ChangeOkUpdate();
+        if (num_altered > 0) {
+          ChangeOkUpdate();
+        }
+      } // ipwh_exec > 0
+
+      // Restore current horizontal scroll bar position
+      m_ctlItemList.Scroll(CSize(m_iListHBarPos, 0));
+      m_ctlItemTree.SetScrollPos(SB_HORZ, m_iTreeHBarPos);
+    } else { // multicmds was created but no commands added
+      delete pmulticmds;
+    }
+  } // rc == IDOK
+  
+  if (m_bOnStartupTransparancyEnabled) {
+    if (!prefs->GetPref(PWSprefs::EnableWindowTransparency)) {
+      // User turned off transparency
+      SetLayered(this, 0);
+    } else {
+      if (byteOldPercentTransparency != (BYTE)prefs->GetPref(PWSprefs::WindowTransparency)) {
+        // User changed transparency
+        SetLayered(this);
+      }
     }
   }
 
   // Restore hotkey as it was or as user changed it - if user pressed OK
-  WORD wVirtualKeyCode = iPWSHotKeyValue & 0xff;
-  WORD wHKModifiers = iPWSHotKeyValue >> 16;
-    
-  // Translate from CHotKeyCtrl to CWnd & PWS modifiers
-  WORD wModifiers = ConvertModifersMFC2Windows(wHKModifiers);
-  WORD wPWSModifiers = ConvertModifersMFC2PWS(wHKModifiers);
-  int32 iAppShortcut = (wPWSModifiers << 16) + wVirtualKeyCode;
-  m_core.SetAppHotKey(iAppShortcut);
+  m_core.SetAppHotKey(iAppHotKeyValue);
 
   if (bAppHotKeyEnabled == TRUE) {
+    WORD wVirtualKeyCode = iAppHotKeyValue & 0xff;
+    WORD wPWSModifiers = iAppHotKeyValue >> 16;
+
+    // Translate from PWS modifer to Windows modifiers
+    WORD wWinModifiers = ConvertModifersPWS2Windows(wPWSModifiers);
+
     // Only set if valid i.e. a character plus at least Alt or Ctrl
-    if (wVirtualKeyCode != 0 && (wModifiers & (MOD_ALT | MOD_CONTROL)) != 0) {
+    if (wVirtualKeyCode != 0 && (wWinModifiers & (MOD_ALT | MOD_CONTROL)) != 0) {
       BOOL brc = RegisterHotKey(m_hWnd, PWS_HOTKEY_ID,
-                                UINT(wModifiers), UINT(wVirtualKeyCode));
+                                UINT(wWinModifiers), UINT(wVirtualKeyCode));
       if (brc == FALSE) {
         CGeneralMsgBox gmb;
         gmb.AfxMessageBox(IDS_NOHOTKEY, MB_OK);
@@ -697,7 +734,7 @@ void DboxMain::OnManagePasswordPolicies()
       StringX sxNewDBPrefsString(PWSprefs::GetInstance()->Store(true));
 
       // Set up Command to update string in database
-      if (m_core.GetReadFileVersion() == PWSfile::VCURRENT) {
+      if (m_core.GetReadFileVersion() >= PWSfile::V30) { // older versions don't have prefs
         Command *pcmd_undo = DBPrefsCommand::Create(&m_core, sxNewDBPrefsString);
         pmulticmds->Add(pcmd_undo);
       }
@@ -707,6 +744,8 @@ void DboxMain::OnManagePasswordPolicies()
     Command *pcmd = DBPolicyNamesCommand::Create(&m_core, MapPSWDPLC,
                              DBPolicyNamesCommand::NP_REPLACEALL);
     pmulticmds->Add(pcmd);
+
+    // Do it
     Execute(pmulticmds);
 
     // Update Minidump user streams

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -18,6 +18,7 @@
 #include "wxutils.h"
 #include "AdvancedSelectionDlg.h"
 #include "./SelectionCriteria.h"
+#include "./SearchUtils.h"
 
 ////@begin XPM images
 #include "./graphics/findtoolbar/new/find.xpm"
@@ -65,8 +66,6 @@ enum {
   ID_FIND_STATUS_AREA
 };
 
-
-
 PasswordSafeSearch::PasswordSafeSearch(PasswordSafeFrame* parent) : m_toolbar(0),
                                                                     m_parentFrame(parent),
                                                                     m_criteria(new SelectionCriteria)
@@ -81,13 +80,11 @@ PasswordSafeSearch::~PasswordSafeSearch(void)
   m_criteria = 0;
 }
 
-
 void PasswordSafeSearch::OnSearchTextChanged(wxCommandEvent& evt)
 {
   wxSearchCtrl *srchCtrl = wxDynamicCast(evt.GetEventObject(), wxSearchCtrl);
   srchCtrl->SetModified(true);
 }
-
 
 /*!
  * wxEVT_COMMAND_TEXT_ENTER event handler for ID_FIND_EDITBOX
@@ -124,11 +121,18 @@ void PasswordSafeSearch::OnDoSearchT(Iter begin, Iter end, Accessor afn)
 
       if (!m_toolbar->GetToolState(ID_FIND_ADVANCED_OPTIONS))
         FindMatches(tostringx(searchText), m_toolbar->GetToolState(ID_FIND_IGNORE_CASE), m_searchPointer, begin, end, afn);
-      else
-        FindMatches(tostringx(searchText), m_toolbar->GetToolState(ID_FIND_IGNORE_CASE), m_searchPointer,
-                      m_criteria->GetSelectedFields(), m_criteria->HasSubgroupRestriction(), m_criteria->SubgroupSearchText(),
+      else {
+        m_searchPointer.Clear();
+        ::FindMatches(tostringx(searchText), m_toolbar->GetToolState(ID_FIND_IGNORE_CASE), m_criteria->GetSelectedFields(),
+                      m_criteria->HasSubgroupRestriction(), tostdstring(m_criteria->SubgroupSearchText()),
                       m_criteria->SubgroupObject(), m_criteria->SubgroupFunction(),
-                      m_criteria->CaseSensitive(), begin, end, afn);
+                    m_criteria->CaseSensitive(), begin, end, afn, [this, afn](Iter itr, bool *keep_going) {
+                      uuid_array_t uuid;
+                      afn(itr).GetUUID(uuid);
+                      m_searchPointer.Add(pws_os::CUUID(uuid));
+                      *keep_going = true;
+                    });
+      }
 
       m_criteria->Clean();
       txtCtrl->SetModified(false);
@@ -181,7 +185,6 @@ void PasswordSafeSearch::FindPrevious()
     }
 }
 
-
 /*!
  * wxEVT_COMMAND_TOOL_CLICKED event handler for ID_FIND_CLOSE
  */
@@ -202,6 +205,8 @@ void PasswordSafeSearch::OnSearchClear(wxCommandEvent& /* evt */)
 
 void PasswordSafeSearch::HideSearchToolbar()
 {
+  if (m_toolbar == nullptr)
+    return;
   m_toolbar->Show(false);
   m_parentFrame->GetSizer()->Layout();
   m_parentFrame->SetFocus();
@@ -305,12 +310,12 @@ void PasswordSafeSearch::RefreshButtons(void)
     const char** bitmap_classic;
     const char** bitmap_classic_disabled;
   } SearchBarButtons[] = {
-          { ID_FIND_CLOSE,            findclose_xpm,    NULL,               classic_findclose_xpm,    NULL                      },
+          { ID_FIND_CLOSE,            findclose_xpm,    nullptr,               classic_findclose_xpm,    nullptr                      },
           { ID_FIND_NEXT,             find_xpm,         find_disabled_xpm,  classic_find_xpm,         classic_find_disabled_xpm },
           { ID_FIND_IGNORE_CASE,      findcase_i_xpm,   findcase_s_xpm,     classic_findcase_i_xpm,   classic_findcase_s_xpm    },
-          { ID_FIND_ADVANCED_OPTIONS, findadvanced_xpm, NULL,               classic_findadvanced_xpm, NULL                      },
-          { ID_FIND_CREATE_REPORT,    findreport_xpm,   NULL,               classic_findreport_xpm,   NULL                      },
-          { ID_FIND_CLEAR,            findclear_xpm,    NULL,               classic_findclear_xpm,    NULL                      },
+          { ID_FIND_ADVANCED_OPTIONS, findadvanced_xpm, nullptr,               classic_findadvanced_xpm, nullptr                      },
+          { ID_FIND_CREATE_REPORT,    findreport_xpm,   nullptr,               classic_findreport_xpm,   nullptr                      },
+          { ID_FIND_CLEAR,            findclear_xpm,    nullptr,               classic_findclear_xpm,    nullptr                      },
   };
 
   const char** _SearchBarInfo::* bitmap_normal;
@@ -369,7 +374,7 @@ void PasswordSafeSearch::CreateSearchBar()
   panelSizer->Add(m_toolbar, wxSizerFlags().Proportion(1).Expand());
 
   m_toolbar->AddTool(ID_FIND_CLOSE, wxEmptyString, wxBitmap(findclose_xpm), wxNullBitmap, wxITEM_NORMAL, _("Close SearchBar"));
-  wxSize srchCtrlSize(m_parentFrame->GetSize().GetWidth()/5, wxDefaultSize.GetHeight());
+  wxSize srchCtrlSize(m_parentFrame->GetSize().GetWidth()/3, wxDefaultSize.GetHeight());
   wxSearchCtrl* srchCtrl = new wxSearchCtrl(m_toolbar, ID_FIND_EDITBOX, wxEmptyString, wxDefaultPosition, srchCtrlSize, wxTE_PROCESS_ENTER);
   srchCtrl->ShowCancelButton(true);
   srchCtrl->ShowSearchButton(true);
@@ -399,7 +404,7 @@ void PasswordSafeSearch::CreateSearchBar()
   //This gross hack is the only way I could think of to get ESC keystrokes from the text ctrl user is typing into
   if (wxDynamicCast(static_cast<wxControl*>(srchCtrl), wxTextCtrl)) {
     //searchCtrl is a wxTextCtrl derivative, like on Mac OS X 10.3+
-    wxDynamicCast(static_cast<wxControl*>(srchCtrl), wxTextCtrl)->Connect(wxEVT_CHAR, wxCharEventHandler(PasswordSafeSearch::OnSearchBarTextChar), NULL, this);
+    wxDynamicCast(static_cast<wxControl*>(srchCtrl), wxTextCtrl)->Connect(wxEVT_CHAR, wxCharEventHandler(PasswordSafeSearch::OnSearchBarTextChar), nullptr, this);
   }
   else {
     //The wxTextCtrl is buried inside the wxSearchCtrl
@@ -407,18 +412,18 @@ void PasswordSafeSearch::CreateSearchBar()
     for( wxWindowList::const_iterator itr = srchChildren.begin(); itr != srchChildren.end(); ++itr) {
       wxTextCtrl* txtCtrl = wxDynamicCast(*itr, wxTextCtrl);
       if (txtCtrl) {
-        txtCtrl->Connect(wxEVT_CHAR, wxCharEventHandler(PasswordSafeSearch::OnSearchBarTextChar), NULL, this);
+        txtCtrl->Connect(wxEVT_CHAR, wxCharEventHandler(PasswordSafeSearch::OnSearchBarTextChar), nullptr, this);
         break;
       }
     }
   }
-  srchCtrl->Connect(wxEVT_COMMAND_TEXT_UPDATED, wxCommandEventHandler(PasswordSafeSearch::OnSearchTextChanged), NULL, this);
-  srchCtrl->Connect(wxEVT_COMMAND_SEARCHCTRL_SEARCH_BTN, wxCommandEventHandler(PasswordSafeSearch::OnDoSearch), NULL, this);
-  srchCtrl->Connect(wxEVT_COMMAND_TEXT_ENTER, wxTextEventHandler(PasswordSafeSearch::OnDoSearch), NULL, this);
-  m_toolbar->Connect(ID_FIND_CLOSE, wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler(PasswordSafeSearch::OnSearchClose), NULL, this);
-  m_toolbar->Connect(ID_FIND_ADVANCED_OPTIONS, wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler(PasswordSafeSearch::OnAdvancedSearchOptions), NULL, this);
-  m_toolbar->Connect(ID_FIND_NEXT, wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler(PasswordSafeSearch::OnDoSearch), NULL, this);
-  m_toolbar->Connect(ID_FIND_CLEAR, wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler(PasswordSafeSearch::OnSearchClear), NULL, this);
+  srchCtrl->Connect(wxEVT_COMMAND_TEXT_UPDATED, wxCommandEventHandler(PasswordSafeSearch::OnSearchTextChanged), nullptr, this);
+  srchCtrl->Connect(wxEVT_COMMAND_SEARCHCTRL_SEARCH_BTN, wxCommandEventHandler(PasswordSafeSearch::OnDoSearch), nullptr, this);
+  srchCtrl->Connect(wxEVT_COMMAND_TEXT_ENTER, wxTextEventHandler(PasswordSafeSearch::OnDoSearch), nullptr, this);
+  m_toolbar->Connect(ID_FIND_CLOSE, wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler(PasswordSafeSearch::OnSearchClose), nullptr, this);
+  m_toolbar->Connect(ID_FIND_ADVANCED_OPTIONS, wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler(PasswordSafeSearch::OnAdvancedSearchOptions), nullptr, this);
+  m_toolbar->Connect(ID_FIND_NEXT, wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler(PasswordSafeSearch::OnDoSearch), nullptr, this);
+  m_toolbar->Connect(ID_FIND_CLEAR, wxEVT_COMMAND_TOOL_CLICKED, wxCommandEventHandler(PasswordSafeSearch::OnSearchClear), nullptr, this);
 }
 
 void PasswordSafeSearch::OnSearchBarTextChar(wxKeyEvent& evt)
@@ -461,7 +466,6 @@ void PasswordSafeSearch::Activate(void)
   ClearToolbarStatusArea();
 }
 
-
 template <class Iter, class Accessor>
 void PasswordSafeSearch::FindMatches(const StringX& searchText, bool fCaseSensitive, SearchPointer& searchPtr, Iter begin, Iter end, Accessor afn)
 {
@@ -470,88 +474,13 @@ void PasswordSafeSearch::FindMatches(const StringX& searchText, bool fCaseSensit
   CItemData::FieldBits bsFields;
   bsFields.set();
 
-  return FindMatches(searchText, fCaseSensitive, searchPtr, bsFields, false, wxEmptyString, CItemData::END, PWSMatch::MR_INVALID, false, begin, end, afn);
-}
-
-bool FindNoCase( const StringX& src, const StringX& dest)
-{
-    StringX srcLower = src;
-    ToLower(srcLower);
-
-    StringX destLower = dest;
-    ToLower(destLower);
-
-    return destLower.find(srcLower) != StringX::npos;
-}
-
-template <class Iter, class Accessor>
-void PasswordSafeSearch::FindMatches(const StringX& searchText, bool fCaseSensitive, SearchPointer& searchPtr,
-                                       const CItemData::FieldBits& bsFields, bool fUseSubgroups, const wxString& subgroupText,
-                                       CItemData::FieldType subgroupObject, PWSMatch::MatchRule subgroupFunction,
-                                       bool subgroupFunctionCaseSensitive, Iter begin, Iter end, Accessor afn)
-{
-  if (searchText.empty())
-      return;
-
-  searchPtr.Clear();
-
-  typedef StringX (CItemData::*ItemDataFuncT)() const;
-
-  struct {
-      CItemData::FieldType type;
-      ItemDataFuncT        func;
-  } ItemDataFields[] = {  {CItemData::GROUP,     &CItemData::GetGroup},
-                          {CItemData::TITLE,     &CItemData::GetTitle},
-                          {CItemData::USER,      &CItemData::GetUser},
-                          {CItemData::PASSWORD,  &CItemData::GetPassword},
-//                        {CItemData::NOTES,     &CItemData::GetNotes},
-                          {CItemData::URL,       &CItemData::GetURL},
-                          {CItemData::EMAIL,     &CItemData::GetEmail},
-                          {CItemData::RUNCMD,    &CItemData::GetRunCommand},
-                          {CItemData::AUTOTYPE,  &CItemData::GetAutoType},
-                          {CItemData::XTIME_INT, &CItemData::GetXTimeInt},
-
-                      };
-
-  for ( Iter itr = begin; itr != end; ++itr) {
-
-    const int fn = (subgroupFunctionCaseSensitive? -subgroupFunction: subgroupFunction);
-    if (fUseSubgroups && !afn(itr).Matches(stringT(subgroupText.c_str()), subgroupObject, fn))
-        continue;
-
-    bool found = false;
-    for (size_t idx = 0; idx < NumberOf(ItemDataFields) && !found; ++idx) {
-      if (bsFields.test(ItemDataFields[idx].type)) {
-          const StringX str = (afn(itr).*ItemDataFields[idx].func)();
-          found = fCaseSensitive? str.find(searchText) != StringX::npos: FindNoCase(searchText, str);
-      }
-    }
-
-    if (!found && bsFields.test(CItemData::NOTES)) {
-        StringX str = afn(itr).GetNotes();
-        found = fCaseSensitive? str.find(searchText) != StringX::npos: FindNoCase(searchText, str);
-    }
-
-    if (!found && bsFields.test(CItemData::PWHIST)) {
-        size_t pwh_max, err_num;
-        PWHistList pwhistlist;
-        CreatePWHistoryList(afn(itr).GetPWHistory(), pwh_max, err_num,
-                            pwhistlist, PWSUtil::TMC_XML);
-        for (PWHistList::iterator iter = pwhistlist.begin(); iter != pwhistlist.end(); iter++) {
-          PWHistEntry pwshe = *iter;
-          found = fCaseSensitive? pwshe.password.find(searchText) != StringX::npos: FindNoCase(searchText, pwshe.password );
-          if (found)
-            break;  // break out of for loop
-        }
-        pwhistlist.clear();
-    }
-
-    if (found) {
-        uuid_array_t uuid;
-        afn(itr).GetUUID(uuid);
-        searchPtr.Add(pws_os::CUUID(uuid));
-    }
-  }
+  return ::FindMatches(searchText, fCaseSensitive, bsFields, false, stringT{}, CItemData::END, PWSMatch::MR_INVALID, false, begin, end, afn,
+                     [&searchPtr, afn](Iter itr, bool *keep_going) {
+                       uuid_array_t uuid;
+                       afn(itr).GetUUID(uuid);
+                       searchPtr.Add(pws_os::CUUID(uuid));
+                       *keep_going = true;
+                     });
 }
 
 /////////////////////////////////////////////////

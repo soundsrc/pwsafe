@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -29,7 +29,7 @@ struct twofish_key {
 class TwoFish : public Fish
 {
 public:
-  enum {BLOCKSIZE=16};
+  static const unsigned int BLOCKSIZE = 16;
   TwoFish(const unsigned char* key, int keylen);
   ~TwoFish();
   void Encrypt(const unsigned char *in, unsigned char *out) const;

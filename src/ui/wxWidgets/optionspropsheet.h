@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -12,17 +12,17 @@
 #ifndef _OPTIONSPROPSHEET_H_
 #define _OPTIONSPROPSHEET_H_
 
-
 /*!
  * Includes
  */
 
 ////@begin includes
-#include "wx/propdlg.h"
-#include "wx/valgen.h"
-#include "wx/statline.h"
-#include "wx/spinctrl.h"
-#include "wx/grid.h"
+#include <wx/propdlg.h>
+#include <wx/valgen.h>
+#include <wx/statline.h>
+#include <wx/spinctrl.h>
+#include <wx/grid.h>
+#include "core/PWScore.h" // for password history actions
 ////@end includes
 
 /*!
@@ -89,6 +89,8 @@ class wxBookCtrlEvent;
 #define ID_PWHISTSTOP 10175
 #define ID_PWHISTSTART 10176
 #define ID_PWHISTSETMAX 10177
+#define ID_PWHISTCLEAR 10188
+#define ID_APPLYTOPROTECTED 10189
 #define ID_PANEL5 10136
 #define ID_CHECKBOX27 10179
 #define ID_CHECKBOX 10000
@@ -101,6 +103,7 @@ class wxBookCtrlEvent;
 #define ID_PANEL6 10137
 #define ID_CHECKBOX30 10182
 #define ID_SPINCTRL13 10183
+#define ID_SPINCTRL14 11183
 #define ID_CHECKBOX31 10184
 #define ID_SPINCTRL 10004
 #define ID_CHECKBOX32 10185
@@ -110,6 +113,16 @@ class wxBookCtrlEvent;
 #define ID_CHECKBOX40 10114
 #define ID_PANEL7 10138
 #define ID_GRID1 10187
+#define ID_STATICTEXT_1 10190
+#define ID_STATICTEXT_2 10191
+#define ID_STATICTEXT_3 10192
+#define ID_STATICTEXT_4 10193
+#define ID_STATICTEXT_5 10194
+#define ID_STATICTEXT_7 10196
+#define ID_STATICTEXT_8 10197
+#define ID_STATICTEXT_9 11197
+#define ID_STATICBOX_1 10198
+#define ID_PWHISTAPPLY 10199
 #define SYMBOL_COPTIONS_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX|wxDIALOG_MODAL
 #define SYMBOL_COPTIONS_TITLE _("Options")
 #define SYMBOL_COPTIONS_IDNAME ID_OPTIONS
@@ -117,20 +130,19 @@ class wxBookCtrlEvent;
 #define SYMBOL_COPTIONS_POSITION wxDefaultPosition
 ////@end control identifiers
 
-
 /*!
  * Options class declaration
  */
 
 class COptions: public wxPropertySheetDialog
 {    
-  DECLARE_DYNAMIC_CLASS( COptions )
+  DECLARE_CLASS( COptions )
   DECLARE_EVENT_TABLE()
 
 public:
   /// Constructors
-  COptions();
-  COptions( wxWindow* parent, wxWindowID id = SYMBOL_COPTIONS_IDNAME, const wxString& caption = SYMBOL_COPTIONS_TITLE, const wxPoint& pos = SYMBOL_COPTIONS_POSITION, const wxSize& size = SYMBOL_COPTIONS_SIZE, long style = SYMBOL_COPTIONS_STYLE );
+  COptions(PWScore &core);
+  COptions( wxWindow* parent, PWScore &core, wxWindowID id = SYMBOL_COPTIONS_IDNAME, const wxString& caption = SYMBOL_COPTIONS_TITLE, const wxPoint& pos = SYMBOL_COPTIONS_POSITION, const wxSize& size = SYMBOL_COPTIONS_SIZE, long style = SYMBOL_COPTIONS_STYLE );
 
   /// Creation
   bool Create( wxWindow* parent, wxWindowID id = SYMBOL_COPTIONS_IDNAME, const wxString& caption = SYMBOL_COPTIONS_TITLE, const wxPoint& pos = SYMBOL_COPTIONS_POSITION, const wxSize& size = SYMBOL_COPTIONS_SIZE, long style = SYMBOL_COPTIONS_STYLE );
@@ -158,9 +170,6 @@ public:
   /// wxEVT_COMMAND_COMBOBOX_SELECTED event handler for ID_COMBOBOX2
   void OnSuffixCBSet( wxCommandEvent& event );
 
-  /// wxEVT_COMMAND_RADIOBUTTON_SELECTED event handler for ID_RADIOBUTTON6
-  void OnBuDirRB( wxCommandEvent& event );
-
   /// wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_BUTTON
   void OnBuDirBrowseClick( wxCommandEvent& event );
 
@@ -176,26 +185,16 @@ public:
   /// wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_BUTTON8
   void OnBrowseLocationClick( wxCommandEvent& event );
 
-  /// wxEVT_COMMAND_CHECKBOX_CLICKED event handler for ID_CHECKBOX26
-  void OnPWHistSaveClick( wxCommandEvent& event );
-
-  /// wxEVT_COMMAND_RADIOBUTTON_SELECTED event handler for ID_PWHISTNOCHANGE
-  void OnPWHistRB( wxCommandEvent& event );
-
-  /// wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_PWHISTNOCHANGE
+  /// wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_PWHISTAPPLY
   void OnPWHistApply( wxCommandEvent& event );
 
-  /// wxEVT_COMMAND_CHECKBOX_CLICKED event handler for ID_CHECKBOX29
-  void OnLockOnIdleClick( wxCommandEvent& event );
-
-  /// wxEVT_COMMAND_CHECKBOX_CLICKED event handler for ID_CHECKBOX30
-  void OnUseSystrayClick( wxCommandEvent& event );
+  /// wxEVT_UPDATE_UI event handler for all command ids
+  void OnUpdateUI(wxUpdateUIEvent& evt);
 
 ////@end COptions event handler declarations
 
   /// wxEVT_COMMAND_BOOKCTRL_PAGE_CHANGING event handler for all pages (wxID_ANY)
   void OnPageChanging(wxBookCtrlEvent& evt);
-
 
 ////@begin COptions member function declarations
 
@@ -246,6 +245,12 @@ public:
 
   int GetPwdefaultlength() const { return m_pwdefaultlength ; }
   void SetPwdefaultlength(int value) { m_pwdefaultlength = value ; }
+
+  bool GetPwHistSave() const { return m_pwhistsave ; }
+  void SetPwHistSave(bool value) { m_pwhistsave = value ;}
+
+  int GetPwHistNumDefault() const { return m_pwhistnumdflt ; }
+  void SetPwHistNumDefault(int value) { m_pwhistnumdflt = value ; }
 
   bool GetPwshowinedit() const { return m_pwshowinedit ; }
   void SetPwshowinedit(bool value) { m_pwshowinedit = value ; }
@@ -304,6 +309,8 @@ public:
   bool GetUseAltAutoType() const { return m_useAltAutoType ; }
   void SetUseAltAutoType(bool value) { m_useAltAutoType = value ; }
 
+  uint32 GetHashItersValue() const { return m_hashIterValue; }
+
   /// Retrieves bitmap resources
   wxBitmap GetBitmapResource( const wxString& name );
 
@@ -334,11 +341,17 @@ public:
   wxStaticText* m_defusernameLBL;
   wxCheckBox* m_pwhistsaveCB;
   wxSpinCtrl* m_pwhistnumdfltSB;
+  wxSpinCtrl* m_pwhdefexpdaysSB;
+  wxRadioButton* m_pwhistnochangeRB;
+  wxRadioButton* m_pwhiststopRB;
+  wxRadioButton* m_pwhiststartRB;
+  wxRadioButton* m_pwhistsetmaxRB;
+  wxRadioButton* m_pwhistclearRB;
   wxButton* m_pwhistapplyBN;
+  wxCheckBox* m_applytoprotectedCB;
   wxCheckBox* m_seclockonidleCB;
   wxSpinCtrl* m_secidletimeoutSB;
   wxCheckBox* m_sysusesystrayCB;
-  wxRadioBox* m_systrayclosediconcolourRB;
   wxSpinCtrl* m_sysmaxREitemsSB;
   wxString m_otherbrowserparams;
   wxStaticText *m_systrayWarning;
@@ -358,6 +371,9 @@ private:
   bool m_preexpirywarn;
   bool m_putgroups1st;
   int m_pwdefaultlength;
+  bool m_pwhistsave;
+  int m_pwhistnumdflt;
+  int m_pwhdefexpdays;
   bool m_pwshowinedit;
   bool m_querysetdef;
   bool m_saveimmediate;
@@ -377,7 +393,9 @@ private:
   bool m_usedefuser;
   bool m_wordwrapnotes;
   bool m_useAltAutoType;
+  PWScore &m_core;
 ////@end COptions member variables
+  uint32 m_hashIterValue;
 #if defined(__X__) || defined(__WXGTK__)
   bool m_usePrimarySelection;
 #endif

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -50,7 +50,7 @@ MFilterSAX2ErrorHandler::~MFilterSAX2ErrorHandler()
 
 long __stdcall MFilterSAX2ErrorHandler::QueryInterface(const struct _GUID &riid,void ** ppvObject)
 {
-  *ppvObject = NULL;
+  *ppvObject = nullptr;
   if (riid == IID_IUnknown ||riid == __uuidof(ISAXContentHandler))
   {
     *ppvObject = static_cast<ISAXErrorHandler *>(this);
@@ -125,10 +125,10 @@ MFilterSAX2ContentHandler::MFilterSAX2ContentHandler()
 {
   m_refCnt = 0;
   m_sxElemContent = _T("");
-  m_pSchema_Version = NULL;
+  m_pSchema_Version = nullptr;
   m_iXMLVersion = -1;
   m_iSchemaVersion = -1;
-  m_pAsker = NULL;
+  m_pAsker = nullptr;
 }
 
 //  -----------------------------------------------------------------------
@@ -138,7 +138,7 @@ MFilterSAX2ContentHandler::~MFilterSAX2ContentHandler()
 
 long __stdcall MFilterSAX2ContentHandler::QueryInterface(const struct _GUID &riid,void ** ppvObject)
 {
-  *ppvObject = NULL;
+  *ppvObject = nullptr;
   if (riid == IID_IUnknown ||riid == __uuidof(ISAXContentHandler)) {
     *ppvObject = static_cast<ISAXContentHandler *>(this);
   }
@@ -194,7 +194,7 @@ HRESULT STDMETHODCALLTYPE MFilterSAX2ContentHandler::startElement(
 
   if (m_bValidation && _tcscmp(szCurElement, _T("filters")) == 0) {
     int iAttribs = 0;
-    if (m_pSchema_Version == NULL) {
+    if (m_pSchema_Version == nullptr) {
       LoadAString(m_strXMLErrors, IDSC_MISSING_SCHEMA_VER);
       return E_FAIL;
     }
@@ -285,7 +285,7 @@ HRESULT STDMETHODCALLTYPE MFilterSAX2ContentHandler::characters(
   m_sxElemContent += szData;
 
   delete [] szData;
-  szData = NULL;
+  szData = nullptr;
 
   return S_OK;
 }
@@ -332,15 +332,15 @@ HRESULT STDMETHODCALLTYPE MFilterSAX2ContentHandler::endElement (
     st_Filterkey fk;
     fk.fpool = m_FPool;
     fk.cs_filtername = cur_filter->fname;
-    if (m_MapFilters->find(fk) != m_MapFilters->end()) {
+    if (m_MapXMLFilters->find(fk) != m_MapXMLFilters->end()) {
       stringT question;
       Format(question, IDSC_FILTEREXISTS, cur_filter->fname.c_str());
-      if (m_pAsker == NULL || !(*m_pAsker)(question)) {
-        m_MapFilters->erase(fk);
+      if (m_pAsker == nullptr || !(*m_pAsker)(question)) {
+        m_MapXMLFilters->erase(fk);
       }
     }
     if (rc == IDYES) {
-      m_MapFilters->insert(PWSFilters::Pair(fk, *cur_filter));
+      m_MapXMLFilters->insert(PWSFilters::Pair(fk, *cur_filter));
     }
     delete cur_filter;
     return S_OK;

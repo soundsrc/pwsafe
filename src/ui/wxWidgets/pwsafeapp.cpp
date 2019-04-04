@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -26,6 +26,8 @@
 ////@end includes
 
 #include <iostream> // currently for debugging
+#include <clocale>  // to get the locales specified by the environment 
+                    // for used functions like wcstombs in src/os/file.h
 
 using namespace std;
 
@@ -36,6 +38,7 @@ using namespace std;
 #include "core/SysInfo.h"
 #include "core/PWSprefs.h"
 #include "core/PWSrand.h"
+#include "os/cleanup.h"
 #include "pwsclip.h"
 #include <wx/timer.h>
 #include <wx/html/helpctrl.h>
@@ -50,7 +53,6 @@ using namespace std;
 #if defined(__X__) || defined(__WXGTK__)
 #include "pwsclip.h"
 #endif
-
 
 #include <wx/spinctrl.h>
 #include <wx/taskbar.h>
@@ -73,7 +75,6 @@ using namespace std;
 #else
 #define STR(s) wxT(s)
 #endif
-
 
 // wx debug messages (a) don't really interest us, and
 // (b) manage to crash wx 3.0.2 under Windows due to some
@@ -124,16 +125,25 @@ static const wxCmdLineEntryDesc cmdLineDesc[] = {
   {wxCMD_LINE_OPTION, STR("g"), STR("config_file"),
    STR("use specified configuration file instead of default"),
    wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL},
-  {wxCMD_LINE_PARAM, NULL, NULL, STR("database"),
+  {wxCMD_LINE_PARAM, nullptr, nullptr, STR("database"),
    wxCMD_LINE_VAL_STRING,
    (wxCMD_LINE_PARAM_OPTIONAL | wxCMD_LINE_PARAM_MULTIPLE)},
-  {wxCMD_LINE_NONE, NULL, NULL, NULL, wxCMD_LINE_VAL_NONE, 0}
+  {wxCMD_LINE_NONE, nullptr, nullptr, nullptr, wxCMD_LINE_VAL_NONE, 0}
 };
 
 #undef STR
 
 static wxReporter aReporter;
 static wxAsker    anAsker;
+
+static void cleanup_handler(int /*signum */, void *p)
+{
+  // Called if we get a signal - don't try to save, since we don't
+  // know what's valid, if anything. Just unlock file, if any.
+  PWScore *pcore = static_cast<PWScore *>(p);
+  pcore->SafeUnlockCurFile();
+  exit(1);
+}
 
 /*!
  * Application instance implementation
@@ -143,13 +153,11 @@ static wxAsker    anAsker;
 IMPLEMENT_APP( PwsafeApp )
 ////@end implement app
 
-
 /*!
  * PwsafeApp type definition
  */
 
 IMPLEMENT_CLASS( PwsafeApp, wxApp )
-
 
 /*!
  * PwsafeApp event table definition
@@ -169,7 +177,7 @@ IMPLEMENT_CLASS( PwsafeApp, wxApp )
 
 PwsafeApp::PwsafeApp() : m_idleTimer(new wxTimer(this, IDLE_TIMER_ID)),
                          m_frame(0), m_recentDatabases(0),
-       m_helpController(nullptr), m_locale(nullptr)
+                         m_locale(nullptr)
 {
   Init();
 }
@@ -187,8 +195,6 @@ PwsafeApp::~PwsafeApp()
   PWSLog::DeleteLog();
   PWSclipboard::DeleteInstance();
 
-  if (m_helpController)
-    delete m_helpController;
   delete m_locale;
 }
 
@@ -198,6 +204,7 @@ PwsafeApp::~PwsafeApp()
 
 void PwsafeApp::Init()
 {
+  pws_os::install_cleanup_handler(cleanup_handler, &m_core);
   m_locale = new wxLocale;
   wxLocale::AddCatalogLookupPathPrefix(L"/usr/share/locale");
   wxLocale::AddCatalogLookupPathPrefix(L"/usr");
@@ -223,7 +230,6 @@ void PwsafeApp::OnAssertFailure(const wxChar *file, int line, const wxChar *func
 }
 #endif
 
-
 /** Activate help subsystem for given language
 * @param language help language for activation (if not found, default will be used)
 */
@@ -237,14 +243,9 @@ bool PwsafeApp::ActivateHelp(wxLanguage language) {
   else { // English is default
     langSuffix = defaultSuffix;
   }
-
-  // Destroy current instance if any
-  if (m_helpController) {
-    m_helpController->Quit();
-    delete m_helpController;
-    m_helpController = nullptr;
-  }
-
+  
+  helpFileNamePath.Clear();
+  
   wxFileName helpFileName = wxFileName(towxstring(pws_os::gethelpdir()), fileNameBase+langSuffix);
   if (!helpFileName.IsFileReadable()) {
     pws_os::Trace(L"Help file for selected language %ls unavailable. Will retry with default.", ToStr(helpFileName.GetFullPath()));
@@ -254,13 +255,9 @@ bool PwsafeApp::ActivateHelp(wxLanguage language) {
       return false;
     }
   }
+  
+  helpFileNamePath = helpFileName.GetFullPath();
 
-  m_helpController = new wxHtmlHelpController(wxHF_DEFAULT_STYLE|wxHF_FRAME, nullptr);
-  if (!m_helpController->Initialize(helpFileName.GetFullPath())){
-    delete m_helpController;
-    m_helpController = NULL;
-    return false;
-  }
   return true;
 }
 
@@ -270,6 +267,11 @@ bool PwsafeApp::ActivateHelp(wxLanguage language) {
 
 bool PwsafeApp::OnInit()
 {
+  // Get the locale environment variable 'LC_CTYPE' specified by the environment
+  // For instance, the behavior of function 'wcstombs' depends on the LC_CTYPE 
+  // category of the selected C locale.
+  setlocale(LC_CTYPE, "");
+  
   //Used by help subsystem
   wxFileSystem::AddHandler(new wxArchiveFSHandler);
 
@@ -359,7 +361,7 @@ bool PwsafeApp::OnInit()
   }
   m_core.SetCurFile(tostringx(filename));
   m_core.SetApplicationNameAndVersion(tostdstring(progName),
-                                      MAKEWORD(MINORVERSION, MAJORVERSION));
+                                      MAKELONG(MINORVERSION, MAJORVERSION));
 
   static wxSingleInstanceChecker appInstance;
   if (!prefs->GetPref(PWSprefs::MultipleInstances) &&
@@ -382,7 +384,7 @@ bool PwsafeApp::OnInit()
     m_core.SetCurFile(L"");
   }
   if (cmd_silent) {
-    if ( wxTaskBarIcon::IsAvailable() ) {
+    if ( IsTaskBarIconAvailable() ) {
       // start silent implies use system tray.
       // Note that if UseSystemTray is already true, then pwsafe will try to run silently anyway
       PWSprefs::GetInstance()->SetPref(PWSprefs::UseSystemTray, true);
@@ -397,12 +399,11 @@ bool PwsafeApp::OnInit()
   m_appIcons.AddIcon(pwsafe32);
   m_appIcons.AddIcon(pwsafe48);
 
-
-  if (!m_helpController){ // helpController (re)created  on language activation
+  if (!isHelpActivated) { // set on language activation by ActivateHelp
     std::wcerr << L"Could not initialize help subsystem." << std::endl;
     if (!prefs->GetPref(PWSprefs::IgnoreHelpLoadError) && !cmd_silent) {
 #if wxCHECK_VERSION(2,9,2)
-      wxRichMessageDialog dlg(NULL,
+      wxRichMessageDialog dlg(nullptr,
         _("Could not initialize help subsystem. Help will not be available."),
         _("Password Safe: Error initializing help"), wxCENTRE|wxOK|wxICON_EXCLAMATION);
       dlg.ShowCheckBox(_("Don't show this warning again"));
@@ -416,12 +417,13 @@ bool PwsafeApp::OnInit()
       _("Password Safe: Error initializing help"), wxOK | wxICON_ERROR);
 #endif
     }
+    
   }
 
   if (!cmd_closed && !cmd_silent && !cmd_minimized) {
     // Get the file, r/w mode and password from user
     // Note that file may be new
-    CSafeCombinationEntry* initWindow = new CSafeCombinationEntry(NULL, m_core);
+    CSafeCombinationEntry* initWindow = new CSafeCombinationEntry(nullptr, m_core);
     int returnValue = initWindow->ShowModal();
 
     initWindow->Destroy();
@@ -430,12 +432,12 @@ bool PwsafeApp::OnInit()
       return false;
     }
     wxASSERT_MSG(!m_frame, wxT("Frame window created unexpectedly"));
-    m_frame = new PasswordSafeFrame(NULL, m_core);
+    m_frame = new PasswordSafeFrame(nullptr, m_core);
     m_frame->Load(initWindow->GetPassword());
   }
   else {
     wxASSERT_MSG(!m_frame, wxT("Frame window created unexpectedly"));
-    m_frame = new PasswordSafeFrame(NULL, m_core);
+    m_frame = new PasswordSafeFrame(nullptr, m_core);
   }
 
   RestoreFrameCoords();
@@ -518,7 +520,6 @@ wxLanguage PwsafeApp::GetSelectedLanguage() {
   }
 }
 
-
 /*!
  * Activates a language.
  *
@@ -557,7 +558,7 @@ bool PwsafeApp::ActivateLanguage(wxLanguage language, bool tryOnly)
   else {
     // (re)set global translation and take care of occupied memory by wxTranslations
     wxTranslations::Set(translations);
-    ActivateHelp(language);
+    isHelpActivated = ActivateHelp(language);
   }
   return bRes;
 }
@@ -571,7 +572,7 @@ int PwsafeApp::OnExit()
   m_idleTimer->Stop();
   recentDatabases().Save();
   PWSprefs *prefs = PWSprefs::GetInstance();
-  if (!m_core.GetCurFile().empty())
+  if (m_core.IsDbOpen())
     prefs->SetPref(PWSprefs::CurrentFile, m_core.GetCurFile());
   // Save Application related preferences
   prefs->SaveApplicationPreferences();
@@ -579,6 +580,7 @@ int PwsafeApp::OnExit()
   PWSMenuShortcuts::GetShortcutsManager()->SaveUserShortcuts();
 
   PWSMenuShortcuts::DestroyShortcutsManager();
+  
 ////@begin PwsafeApp cleanup
   return wxApp::OnExit();
 ////@end PwsafeApp cleanup
@@ -610,8 +612,8 @@ void PwsafeApp::ConfigureIdleTimer()
 void PwsafeApp::OnIdleTimer(wxTimerEvent &evt)
 {
   if (evt.GetId() == IDLE_TIMER_ID && PWSprefs::GetInstance()->GetPref(PWSprefs::LockDBOnIdleTimeout)) {
-    if (m_frame != NULL && !m_frame->GetCurrentSafe().IsEmpty()) {
-      m_frame->HideUI(true);  //true => lock
+    if (m_frame != nullptr && !m_frame->GetCurrentSafe().IsEmpty()) {
+      m_frame->IconizeOrHideAndLock();
     }
   }
 }
@@ -627,7 +629,7 @@ CRecentDBList &PwsafeApp::recentDatabases()
   // we create an instance of m_recentDatabases
   // as late as possible in order to make
   // sure that prefs' is set correctly (user, machine, etc.)
-  if (m_recentDatabases == NULL)
+  if (m_recentDatabases == nullptr)
     m_recentDatabases = new CRecentDBList;
   return *m_recentDatabases;
 }
@@ -745,34 +747,37 @@ int PwsafeApp::FilterEvent(wxEvent& evt) {
       (et == wxEVT_COMMAND_BUTTON_CLICKED ||
        et == wxEVT_COMMAND_MENU_SELECTED)) {
     OnHelp(*wxDynamicCast(&evt, wxCommandEvent));
-    return int(true);
+    return Event_Processed;
   }
   return wxApp::FilterEvent(evt);
 }
 
 void PwsafeApp::OnHelp(wxCommandEvent& evt)
 {
-  if (!m_helpController)
+  if (!isHelpActivated)
     return;
-  wxWindow* win = wxDynamicCast(evt.GetEventObject(), wxWindow);
-  if (win) {
+  
+  wxWindow* window = wxDynamicCast(evt.GetEventObject(), wxWindow);
+  
+  if (window) {
     //The window associated with the event is typically the Help button.  Fail if
     //we can't get to its parent
-    if (win->GetId() == wxID_HELP && ((win = win->GetParent()) == nullptr))
+    if (window->GetId() == wxID_HELP && ((window = window->GetParent()) == nullptr))
       return;
 
     wxString keyName, msg;
     //Is this a property sheet?
-    wxPropertySheetDialog* propSheet = wxDynamicCast(win, wxPropertySheetDialog);
+    wxPropertySheetDialog* propSheet = wxDynamicCast(window, wxPropertySheetDialog);
     if (propSheet) {
-      const wxString dlgName = win->GetClassInfo()->GetClassName();
+      const wxString dlgName = window->GetClassInfo()->GetClassName();
       const wxString pageName = propSheet->GetBookCtrl()->GetPageText(propSheet->GetBookCtrl()->GetSelection());
       keyName = dlgName + wxT('#') + pageName;
       msg << _("Missing help definition for page \"") << pageName
           << _("\" of \"") << dlgName
           << wxT("\".\n");
-    } else { // !propSheet
-      keyName = win->GetClassInfo()->GetClassName();
+    }
+    else { // !propSheet
+      keyName = window->GetClassInfo()->GetClassName();
       msg << _("Missing help definition for window \"") << keyName
           << wxT("\".\n");
     }
@@ -780,7 +785,7 @@ void PwsafeApp::OnHelp(wxCommandEvent& evt)
     StringToStringMap& helpmap = GetHelpMap();
     StringToStringMap::iterator itr = helpmap.find(keyName);
     if (itr != helpmap.end()) {
-      m_helpController->DisplaySection(itr->second);
+      wxHtmlModalHelp help(wxGetApp().GetTopWindow(), helpFileNamePath, itr->second, wxHF_DEFAULT_STYLE);
     }
     else {
 #ifdef __WXDEBUG__
@@ -788,10 +793,11 @@ void PwsafeApp::OnHelp(wxCommandEvent& evt)
       wxMessageBox(msg, _("Help Undefined"), wxOK | wxICON_EXCLAMATION);
 #endif
     } // keyName not found in map
-  } else {
+  }
+  else {
     //just display the main page.  Could happen if the click came from a menu instead of
     //a button, like for the top-level frame
-    m_helpController->DisplayContents();
+    wxHtmlModalHelp help(wxGetApp().GetTopWindow(), helpFileNamePath, wxT(""), wxHF_DEFAULT_STYLE);
   }
 }
 

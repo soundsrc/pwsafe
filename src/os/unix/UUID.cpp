@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -34,13 +34,13 @@ const pws_os::CUUID &pws_os::CUUID::NullUUID()
   return nullUUID;
 }
 
-pws_os::CUUID::CUUID() : m_ua(NULL), m_canonic(false)
+pws_os::CUUID::CUUID() : m_ua(nullptr), m_canonic(false)
 {
   uuid_generate(m_uuid);
 }
 
 pws_os::CUUID::CUUID(const CUUID &uuid)
-  : m_ua(NULL), m_canonic(uuid.m_canonic)
+  : m_ua(nullptr), m_canonic(uuid.m_canonic)
 {
   uuid_copy(m_uuid, uuid.m_uuid);
 }
@@ -52,7 +52,7 @@ pws_os::CUUID &pws_os::CUUID::operator=(const CUUID &that)
     if (m_ua) {
       trashMemory(m_ua, sizeof(uuid_array_t));
       delete[] m_ua;
-      m_ua = NULL;
+      m_ua = nullptr;
     }
     m_canonic = that.m_canonic;
   }
@@ -60,20 +60,20 @@ pws_os::CUUID &pws_os::CUUID::operator=(const CUUID &that)
 }
 
 pws_os::CUUID::CUUID(const uuid_array_t &uuid_array, bool canonic)
-  : m_ua(NULL), m_canonic(canonic)
+  : m_ua(nullptr), m_canonic(canonic)
 {
   uuid_copy(m_uuid, uuid_array);
 }
 
 pws_os::CUUID::CUUID(const StringX &s)
-  : m_ua(NULL), m_canonic(false)
+  : m_ua(nullptr), m_canonic(false)
 {
   // s is a hex string as returned by cast to StringX
   ASSERT(s.length() == 32);
   unsigned char *uu = m_uuid;
 
   int x;
-  for (int i = 0; i < 16; i++) {
+  for (unsigned int i = 0; i < 16; i++) {
     iStringXStream is(s.substr(i*2, 2));
     is >> hex >> x;
     uu[i] = static_cast<unsigned char>(x);
@@ -96,7 +96,7 @@ void pws_os::CUUID::GetARep(uuid_array_t &uuid_array) const
 
 const uuid_array_t *pws_os::CUUID::GetARep() const
 {
-  if (m_ua == NULL) {
+  if (m_ua == nullptr) {
     m_ua = reinterpret_cast<uuid_array_t *>(new uuid_array_t);
     GetARep(*m_ua);
   }
@@ -112,7 +112,6 @@ bool pws_os::CUUID::operator<(const pws_os::CUUID &that) const
 {
   return uuid_compare(m_uuid, that.m_uuid) < 0;
 }
-
 
 std::ostream &pws_os::operator<<(std::ostream &os, const pws_os::CUUID &uuid)
 {
@@ -147,7 +146,6 @@ pws_os::CUUID::operator StringX() const
   m_canonic = sc;
   return os.str();
 }
-
 
 #ifdef TEST
 #include <stdio.h>

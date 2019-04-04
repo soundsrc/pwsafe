@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -15,6 +15,8 @@
 #include "./graphics/toolbar/new/open_disabled.xpm"
 #include "./graphics/toolbar/new/close.xpm"
 #include "./graphics/toolbar/new/close_disabled.xpm"
+#include "./graphics/toolbar/new/lock.xpm"
+#include "./graphics/toolbar/new/lock_disabled.xpm"
 #include "./graphics/toolbar/new/save.xpm"
 #include "./graphics/toolbar/new/save_disabled.xpm"
 #include "./graphics/toolbar/new/copypassword.xpm"
@@ -91,6 +93,8 @@
 #include "./graphics/toolbar/classic/open_disabled.xpm"
 #include "./graphics/toolbar/classic/close.xpm"
 #include "./graphics/toolbar/classic/close_disabled.xpm"
+#include "./graphics/toolbar/classic/lock.xpm"
+#include "./graphics/toolbar/classic/lock_disabled.xpm"
 #include "./graphics/toolbar/classic/save.xpm"
 #include "./graphics/toolbar/classic/save_disabled.xpm"
 #include "./graphics/toolbar/classic/copypassword.xpm"
@@ -160,14 +164,13 @@
 //#include "./graphics/toolbar/classic/viewreports.xpm"
 //#include "./graphics/toolbar/classic/viewreports_disabled.xpm"
 
-
 enum {ID_SEPARATOR = -1};
 
 #define PWS_TOOLBAR_BITMAPS(n)  wxCONCAT(n, _xpm),                              \
                                 wxCONCAT(wxCONCAT(n, _disabled), _xpm),         \
                                 wxCONCAT(wxCONCAT(classic_, n), _xpm),          \
                                 wxCONCAT(wxCONCAT(classic_, n), _disabled_xpm)
-#define SEPARATOR {ID_SEPARATOR, wxEmptyString, NULL, NULL, NULL, NULL}
+#define SEPARATOR {ID_SEPARATOR, wxEmptyString, nullptr, nullptr, nullptr, nullptr}
 
 struct _PwsToolbarInfo{
   int id;
@@ -177,8 +180,8 @@ struct _PwsToolbarInfo{
   const char** bitmap_classic;
   const char** bitmap_classic_disabled;
   // Following ctor's required to shut up some compiler warnings
-_PwsToolbarInfo() : id(0), tooltip(wxEmptyString), bitmap_normal(NULL), bitmap_disabled(NULL),
-    bitmap_classic(NULL), bitmap_classic_disabled(NULL) {}
+_PwsToolbarInfo() : id(0), tooltip(wxEmptyString), bitmap_normal(nullptr), bitmap_disabled(nullptr),
+    bitmap_classic(nullptr), bitmap_classic_disabled(nullptr) {}
 _PwsToolbarInfo(int aid, const wxString &atooltip, const char** abitmap_normal,
                 const char** abitmap_disabled, const char** abitmap_classic, const char** abitmap_classic_disabled) :
   id(aid), tooltip(atooltip), bitmap_normal(abitmap_normal), bitmap_disabled(abitmap_disabled),
@@ -189,6 +192,7 @@ _PwsToolbarInfo(int aid, const wxString &atooltip, const char** abitmap_normal,
           { wxID_NEW,         _("Make New Database"),               PWS_TOOLBAR_BITMAPS(new)            },
           { wxID_OPEN,        _("Open Another Database"),           PWS_TOOLBAR_BITMAPS(open)           },
           { wxID_CLOSE,       _("Close Database"),                  PWS_TOOLBAR_BITMAPS(close)          },
+          { ID_LOCK_SAFE,     _("Lock Database"),                   PWS_TOOLBAR_BITMAPS(lock)           },
           { wxID_SAVE,        _("Save Database"),                   PWS_TOOLBAR_BITMAPS(save)           },
           SEPARATOR,
           { ID_COPYPASSWORD,   _("Copy Password to Clipboard"),     PWS_TOOLBAR_BITMAPS(copypassword)   },

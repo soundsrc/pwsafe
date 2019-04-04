@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -210,7 +210,7 @@ void SHA256::Update(const unsigned char *in, size_t inlen)
 {
   const size_t block_size = 64;
   size_t n;
-  ASSERT(in != NULL || inlen == 0);
+  ASSERT(in != nullptr || inlen == 0);
   ASSERT(curlen <= sizeof(buf));
   while (inlen > 0) {
     if (curlen == 0 && inlen >= block_size) {
@@ -241,7 +241,7 @@ void SHA256::Final(unsigned char digest[HASHLEN])
 {
   int i;
 
-  ASSERT(digest != NULL);
+  ASSERT(digest != nullptr);
 
   ASSERT(curlen < sizeof(buf));
 

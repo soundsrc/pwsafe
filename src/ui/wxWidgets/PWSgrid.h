@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -12,17 +12,20 @@
 #ifndef _PWSGRID_H_
 #define _PWSGRID_H_
 
-
 /*!
  * Includes
  */
 
 ////@begin includes
-#include "wx/grid.h"
+#include <wx/grid.h>
+#include <wx/headerctrl.h>
 ////@end includes
+
 #include "core/ItemData.h"
 #include "core/PWScore.h"
 #include "os/UUID.h"
+
+#include <functional>
 #include <map>
 
 /*!
@@ -48,13 +51,15 @@ class PWSGrid;
 typedef std::map<int, pws_os::CUUID> RowUUIDMapT;
 typedef std::map<pws_os::CUUID, int, std::less<pws_os::CUUID> > UUIDRowMapT;
 
-
 /*!
  * PWSGrid class declaration
  */
 
 class PWSGrid: public wxGrid
-{    
+{
+  typedef std::multimap<wxString, const CItemData*, std::greater<wxString> > DescendingSortedMultimap;
+  typedef std::multimap<wxString, const CItemData*, std::less<wxString> >    AscendingSortedMultimap;
+
   DECLARE_CLASS( PWSGrid )
   DECLARE_EVENT_TABLE()
 
@@ -76,13 +81,14 @@ public:
 
   /// Creates the controls and sizers
   void CreateControls();
-  
+
   // Notification from PWScore when new data is loaded
   void OnPasswordListModified();
 
   void AddItem(const CItemData &item, int row = -1);
   void UpdateItem(const CItemData &item);
   void RefreshRow(int row);
+  void RefreshItem(const CItemData &item, int row = -1);
   void RefreshItemRow(const pws_os::CUUID& uuid);
   void RefreshItemField(const pws_os::CUUID& uuid, CItemData::FieldType ft);
   void Remove(const pws_os::CUUID &uuid);
@@ -90,7 +96,7 @@ public:
   void DeleteItems(int row, size_t numItems);
   void DeleteAllItems();
   void Clear();
-  
+
 ////@begin PWSGrid event handler declarations
 
   /// wxEVT_GRID_CELL_RIGHT_CLICK event handler for ID_LISTBOX
@@ -104,10 +110,11 @@ public:
   /// wxEVT_GRID_SELECT_CELL event handler for ID_LISTBOX
   void OnSelectCell( wxGridEvent& event );
 
-  /// wxEVT_CHAR event handler for ID_LISTBOX
-  void OnChar( wxKeyEvent& evt);
-
   void OnDBGUIPrefsChange(wxEvent& evt);
+
+  /// EVT_HEADER_CLICK
+  void OnHeaderClick(wxHeaderCtrlEvent& event);
+
 ////@end PWSGrid event handler declarations
 
 ////@begin PWSGrid member function declarations
@@ -123,19 +130,26 @@ public:
   static bool ShowToolTips();
 
   CItemData *GetItem(int row) const;
-  
+
   void SelectItem(const pws_os::CUUID& uuid);
 
   int  FindItemRow(const pws_os::CUUID& uu);
 
-  void SaveSettings(void) const;
+  void SaveSettings() const;
 
   void SetFilterState(bool state);
+
+  void UpdateSorting();
 
 ////@begin PWSGrid member variables
 ////@end PWSGrid member variables
 
  private:
+  void SortByColumn(int column, bool ascending);
+
+  template<typename ItemsCollection>
+  void RearrangeItems(ItemsCollection& collection, int column);
+
   PWScore &m_core;
   RowUUIDMapT m_row_map;
   UUIDRowMapT m_uuid_map;

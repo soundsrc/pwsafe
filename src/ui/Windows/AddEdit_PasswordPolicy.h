@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -42,20 +42,19 @@ public:
   BOOL m_pweasyvision;
   BOOL m_pwmakepronounceable;
 
-  size_t m_pwdefaultlength;
-  size_t m_pwdigitminlength;
-  size_t m_pwlowerminlength;
-  size_t m_pwsymbolminlength;
-  size_t m_pwupperminlength;
-
+  int m_pwdefaultlength;
+  int m_pwdigitminlength;
+  int m_pwlowerminlength;
+  int m_pwsymbolminlength;
+  int m_pwupperminlength;
   //}}AFX_DATA
 
   // Overrides
   // ClassWizard generate virtual function overrides
   //{{AFX_VIRTUAL(CAddEdit_PasswordPolicy)
 protected:
-  virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
-  BOOL PreTranslateMessage(MSG* pMsg);
+  virtual void DoDataExchange(CDataExchange *pDX);    // DDX/DDV support
+  virtual BOOL PreTranslateMessage(MSG *pMsg);
   virtual BOOL OnApply();
   virtual BOOL OnKillActive();
   //}}AFX_VIRTUAL

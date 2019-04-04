@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -34,13 +34,11 @@
 ////@begin XPM images
 ////@end XPM images
 
-
 /*!
  * CreateShortcutDlg type definition
  */
 
 IMPLEMENT_CLASS( CreateShortcutDlg, wxDialog )
-
 
 /*!
  * CreateShortcutDlg event table definition
@@ -55,7 +53,6 @@ BEGIN_EVENT_TABLE( CreateShortcutDlg, wxDialog )
 
 END_EVENT_TABLE()
 
-
 /*!
  * CreateShortcutDlg constructors
  */
@@ -67,12 +64,11 @@ CreateShortcutDlg::CreateShortcutDlg(wxWindow* parent, PWScore &core,
                                      long style)
 : m_core(core), m_base(base), m_ui(dynamic_cast<UIInterFace *>(parent))
 {
-  ASSERT(m_base != NULL);
-  ASSERT(m_ui != NULL);
+  ASSERT(m_base != nullptr);
+  ASSERT(m_ui != nullptr);
   Init();
   Create(parent, id, caption, pos, size, style);
 }
-
 
 /*!
  * CreateShortcutDlg creator
@@ -99,7 +95,7 @@ void CreateShortcutDlg::ItemFieldsToDialog()
 {
   // Populate the combo box
   std::vector<stringT> aryGroups;
-  m_core.GetUniqueGroups(aryGroups);
+  m_core.GetAllGroups(aryGroups);
   for (size_t igrp = 0; igrp < aryGroups.size(); igrp++) {
     m_groupCtrl->Append(aryGroups[igrp].c_str());
   }
@@ -107,7 +103,6 @@ void CreateShortcutDlg::ItemFieldsToDialog()
   // group that we can pre-select for user, e.g.,
   // we're invoked via right-click n a node
 }
-
 
 /*!
  * CreateShortcutDlg destructor
@@ -119,7 +114,6 @@ CreateShortcutDlg::~CreateShortcutDlg()
 ////@end CreateShortcutDlg destruction
 }
 
-
 /*!
  * Member initialisation
  */
@@ -127,10 +121,9 @@ CreateShortcutDlg::~CreateShortcutDlg()
 void CreateShortcutDlg::Init()
 {
 ////@begin CreateShortcutDlg member initialisation
-  m_groupCtrl = NULL;
+  m_groupCtrl = nullptr;
 ////@end CreateShortcutDlg member initialisation
 }
-
 
 /*!
  * Control creation for CreateShortcutDlg
@@ -190,7 +183,6 @@ void CreateShortcutDlg::CreateControls()
 ////@end CreateShortcutDlg content construction
 }
 
-
 /*!
  * Should we show tooltips?
  */
@@ -223,7 +215,6 @@ wxIcon CreateShortcutDlg::GetIconResource( const wxString& WXUNUSED(name) )
   return wxNullIcon;
 ////@end CreateShortcutDlg icon retrieval
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_OK
@@ -259,4 +250,3 @@ void CreateShortcutDlg::OnOkClick( wxCommandEvent& /* evt */ )
   }
   EndModal(wxID_OK);
 }
-

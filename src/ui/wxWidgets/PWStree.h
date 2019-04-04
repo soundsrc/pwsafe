@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -12,17 +12,19 @@
 #ifndef _PWSTREECTRL_H_
 #define _PWSTREECTRL_H_
 
-
 /*!
  * Includes
  */
 
 ////@begin includes
-#include "wx/treectrl.h"
+#include <wx/treebase.h>
+#include <wx/treectrl.h>
 ////@end includes
+
 #include "core/ItemData.h"
 #include "core/PWScore.h"
 #include "os/UUID.h"
+
 #include <map>
 
 /*!
@@ -52,7 +54,7 @@ typedef std::map<pws_os::CUUID, wxTreeItemId, std::less<pws_os::CUUID> > UUIDTIM
  */
 
 class PWSTreeCtrl: public wxTreeCtrl
-{    
+{
   DECLARE_CLASS( PWSTreeCtrl )
   DECLARE_EVENT_TABLE()
 
@@ -85,9 +87,6 @@ public:
   /// wxEVT_TREE_ITEM_MENU event handler for ID_TREECTRL
   void OnContextMenu( wxTreeEvent& evt);
 
-  /// wxEVT_CHAR event handler for ID_TREECTRL
-  void OnChar( wxKeyEvent& evt);
-
 ////@end PWSTreeCtrl event handler declarations
   void OnGetToolTip( wxTreeEvent& evt); // Added manually
 
@@ -102,6 +101,9 @@ public:
   void OnRenameGroup(wxCommandEvent& evt);
 
   void OnEndLabelEdit( wxTreeEvent& evt );
+
+  /// wxEVT_TREE_KEY_DOWN event handler for ID_TREECTRL
+  void OnKeyDown(wxTreeEvent& evt);
 
 ////@begin PWSTreeCtrl member function declarations
 
@@ -122,6 +124,11 @@ public:
   void AddEmptyGroup(const StringX& group) { AddGroup(group); }
   void SetFilterState(bool state);
 
+  void SetGroupDisplayStateAllExpanded();
+  void SetGroupDisplayStateAllCollapsed();
+  void SaveGroupDisplayState();
+  void RestoreGroupDisplayState();
+
  private:
   //overridden from base for case-insensitive sort
   virtual int OnCompareItems(const wxTreeItemId& item1, const wxTreeItemId& item2);
@@ -133,6 +140,12 @@ public:
   void SetItemImage(const wxTreeItemId &node, const CItemData &item);
   void FinishAddingGroup(wxTreeEvent& evt, wxTreeItemId groupItem);
   void FinishRenamingGroup(wxTreeEvent& evt, wxTreeItemId groupItem, const wxString& oldPath);
+
+  std::vector<bool> GetGroupDisplayState();
+  void SetGroupDisplayState(const std::vector<bool> &groupstates);
+
+  template<typename GroupItemConsumer>
+  void TraverseTree(wxTreeItemId itemId, GroupItemConsumer&& consumer);
 ////@begin PWSTreeCtrl member variables
 ////@end PWSTreeCtrl member variables
   PWScore &m_core;

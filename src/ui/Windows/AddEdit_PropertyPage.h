@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -11,6 +11,7 @@
 #include "PWPropertyPage.h"
 #include "SecString.h"
 #include "ControlExtns.h"
+
 #include "core/ItemData.h"
 #include "core/ItemAtt.h"
 #include "core/PWSprefs.h"
@@ -38,17 +39,18 @@ struct st_AE_master_data {
   CSecString title;
   CSecString username;
   CSecString realpassword;
+  CSecString lastpassword;
   CSecString oldRealPassword;
-  CSecString realnotes;
-  CSecString originalrealnotesTRC;
+  CSecString notes;
+  CSecString originalnotesTRC;
   CSecString URL;
   CSecString email;
 
   CSecString base;
-  CSecString dependents;
+  std::vector<StringX> vsxdependents;
   pws_os::CUUID entry_uuid;
+  pws_os::CUUID original_base_uuid;
   pws_os::CUUID base_uuid;
-  int num_dependents;
   int ibasedata;
   enum CItemData::EntryType original_entrytype;
 
@@ -56,6 +58,9 @@ struct st_AE_master_data {
   CSecString autotype;
   CSecString runcommand;
   short DCA, oldDCA, ShiftDCA, oldShiftDCA;
+  // Preferences min/max values
+  short prefminPWHNumber;
+  short prefmaxPWHNumber;
 
   // Date & Time related stuff
   CSecString locCTime;
@@ -80,6 +85,9 @@ struct st_AE_master_data {
   CSecString oldsymbols;
   CSecString policyname;
   CSecString oldpolicyname;
+  // Preferences min/max values
+  int prefminPWLength;
+  int prefmaxPWLength;
 
   // Keyboard shortcut
   int KBShortcut, oldKBShortcut;
@@ -122,9 +130,10 @@ public:
   CSecString &M_title() {return m_AEMD.title;}
   CSecString &M_username() {return m_AEMD.username;}
   CSecString &M_realpassword() {return m_AEMD.realpassword;}
+  CSecString &M_lastpassword() { return m_AEMD.lastpassword; }
   CSecString &M_oldRealPassword() {return m_AEMD.oldRealPassword;}
-  CSecString &M_realnotes() {return m_AEMD.realnotes;}
-  CSecString &M_originalrealnotesTRC() {return m_AEMD.originalrealnotesTRC;}
+  CSecString &M_notes() {return m_AEMD.notes;}
+  CSecString &M_originalnotesTRC() {return m_AEMD.originalnotesTRC;}
   CSecString &M_URL() {return m_AEMD.URL;}
   CSecString &M_email() {return m_AEMD.email;}
   CSecString &M_symbols() {return m_AEMD.symbols;}
@@ -132,10 +141,10 @@ public:
   CSecString &M_default_symbols() {return m_AEMD.default_symbols;}
 
   CSecString &M_base() {return m_AEMD.base;}
-  CSecString &M_dependents() {return m_AEMD.dependents;}
+  std::vector<StringX> &M_vsxdependents() {return m_AEMD.vsxdependents;}
   pws_os::CUUID &M_entry_uuid() {return m_AEMD.entry_uuid;}
   pws_os::CUUID &M_base_uuid() {return m_AEMD.base_uuid;}
-  int &M_num_dependents() {return m_AEMD.num_dependents;}
+  pws_os::CUUID &M_original_base_uuid() { return m_AEMD.original_base_uuid; }
   int &M_ibasedata() {return m_AEMD.ibasedata;}
   CItemData::EntryType &M_original_entrytype() {return m_AEMD.original_entrytype;}
 
@@ -146,6 +155,9 @@ public:
   short &M_oldDCA() {return m_AEMD.oldDCA;}
   short &M_ShiftDCA() {return m_AEMD.ShiftDCA;}
   short &M_oldShiftDCA() {return m_AEMD.oldShiftDCA;}
+  // Preferences min/max values
+  short &M_prefminPWHNumber() { return m_AEMD.prefminPWHNumber; }
+  short &M_prefmaxPWHNumber() { return m_AEMD.prefmaxPWHNumber; }
   
   // Date & Time related stuff
   CSecString &M_locCTime() {return m_AEMD.locCTime;}
@@ -168,6 +180,9 @@ public:
   size_t &M_oldMaxPWHistory() {return m_AEMD.oldMaxPWHistory;}
   BOOL &M_SavePWHistory() {return m_AEMD.SavePWHistory;}
   BOOL &M_oldSavePWHistory() {return m_AEMD.oldSavePWHistory;}
+  // Preferences min/max values
+  int &M_prefminPWLength() { return m_AEMD.prefminPWLength; }
+  int &M_prefmaxPWLength() { return m_AEMD.prefmaxPWLength; }
 
   // Password Policy
   PWPolicy &M_pwp() {return m_AEMD.pwp;}

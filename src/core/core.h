@@ -71,6 +71,7 @@
 #define IDSC_FLDNMSHIFTDCA              3071
 #define IDSC_FLDNMPWPOLICYNAME          3072
 #define IDSC_FLDNMKBSHORTCUT            3073
+#define IDSC_FLDNMATTREF                3074
 
 #define IDSC_CONFIG_NONE                3230
 #define IDSC_CONFIG_REGISTRY            3231
@@ -281,6 +282,11 @@
 #define IDSC_VALIDATE_ORPHAN_ATT        3454
 #define IDSC_VALIDATE_ATTACHMENT        3455
 #define IDCS_VALIDATE_NOTSET            3456
+#define IDSC_EMPTYGROUP                 3457
+#define IDSC_EMPTYGROUPS                3458
+#define IDSC_IMPORTEDEMPTYGROUPS        3459
+#define IDSC_FILTERSEXPORTEDTODB        3460
+#define IDSC_FOUNDENTRIESFILTER         3461
 
 // Keep DCA together
 #define IDSC_CURRENTDEFAULTDCA          4000
@@ -307,7 +313,6 @@
 #define IDSC_STATBROWSEPLUS             4030
 #define IDSC_STATRUN                    4031
 #define IDSC_STATSENDEMAIL              4032
-
 
 // Named Policy stuff
 #define IDSC_PUSELOWER                  4100

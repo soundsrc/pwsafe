@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -47,16 +47,26 @@ static char THIS_FILE[] = __FILE__;
 
 void DboxMain::OnCancelFilter()
 {
-  // Deal with the 2 internal filters before user defined ones
+  // Deal with the 3 internal filters before user defined ones
+
+  // Save currently selected items
+  SaveGUIStatus();
+
   if (m_bExpireDisplayed) {
     OnShowExpireList();
   } else
   if (m_bUnsavedDisplayed) {
     OnShowUnsavedEntries();
   } else
+  if (m_bFindFilterDisplayed) {
+    OnShowFoundEntries();
+  } else
   if (m_bFilterActive) {
     ApplyFilter();
   }
+
+  // Now try to restore selection
+  RestoreGUIStatus();
 }
 
 void DboxMain::OnApplyFilter()
@@ -74,8 +84,8 @@ bool DboxMain::ApplyFilter(bool bJustDoIt)
   fk.fpool = (FilterPool)m_currentfilterpool;
   fk.cs_filtername = m_selectedfiltername;
 
-  mf_iter = m_MapFilters.find(fk);
-  if (mf_iter == m_MapFilters.end())
+  mf_iter = m_MapAllFilters.find(fk);
+  if (mf_iter == m_MapAllFilters.end())
     return false;
 
   CurrentFilter() = mf_iter->second;
@@ -105,17 +115,21 @@ void DboxMain::OnSetFilter()
   CSetFiltersDlg sf(this, &filters, PWS_MSG_EXECUTE_FILTERS, bCanHaveAttachments, &sMediaTypes);
 
   INT_PTR rc = sf.DoModal();
-  if (rc == IDOK) {
+
+  if (rc == IDOK || (rc == IDCANCEL && m_bFilterActive)) {
     // If filters currently active - update and re-apply
     // If not, just update
+
+    // User can apply the filter in SetFiltersDlg and then press Cancel button
+    // and so still process
     CurrentFilter().Empty();
     CurrentFilter() = filters;
 
     st_Filterkey fk;
     fk.fpool = FPOOL_SESSION;
     fk.cs_filtername = CurrentFilter().fname;
-    m_MapFilters.erase(fk);
-    m_MapFilters.insert(PWSFilters::Pair(fk, CurrentFilter()));
+    m_MapAllFilters.erase(fk);
+    m_MapAllFilters.insert(PWSFilters::Pair(fk, CurrentFilter()));
 
     m_currentfilterpool = fk.fpool;
     m_selectedfiltername = fk.cs_filtername.c_str();
@@ -146,21 +160,26 @@ bool DboxMain::EditFilter(st_filters *pfilters, const bool &bAllowSet)
 void DboxMain::ClearFilter()
 {
   CurrentFilter().Empty();
+
   m_bFilterActive = false;
-  ApplyFilters();
+  m_ctlItemTree.SetFilterState(m_bFilterActive);
+  m_ctlItemList.SetFilterState(m_bFilterActive);
+  m_StatusBar.SetFilterStatus(m_bFilterActive);
+
+  if (m_bOpen)
+    ApplyFilters();
 }
 
 void DboxMain::ApplyFilters()
 {
-  m_statusBar.SetFilterStatus(m_bFilterActive);
-
-  m_statusBar.Invalidate();
-  m_statusBar.UpdateWindow();
-
   m_ctlItemTree.SetFilterState(m_bFilterActive);
   m_ctlItemList.SetFilterState(m_bFilterActive);
+  m_StatusBar.SetFilterStatus(m_bFilterActive);
+
   m_ctlItemTree.Invalidate();
   m_ctlItemList.Invalidate();
+  m_StatusBar.Invalidate();
+  m_StatusBar.UpdateWindow();
 
   m_FilterManager.CreateGroups();
 
@@ -170,14 +189,26 @@ void DboxMain::ApplyFilters()
   m_MainToolBar.GetToolBarCtrl().EnableButton(ID_MENUITEM_APPLYFILTER, 
                                               bFilters ? TRUE : FALSE);
 
-  // Clear Find as old entries might not now be in the List View (which is how
-  // Find works).  Also, hide it if visible.
-  m_FindToolBar.ClearFind();
-  if (m_FindToolBar.IsVisible())
-    OnHideFindToolBar();
-
   if (m_bFilterActive)
     m_ctlItemTree.OnExpandAll();
+
+  // m_LastFoundTreeItem might be invalid if filter activated or cleared
+  pws_os::CUUID entry_uuid;
+  int iLastShown = m_FindToolBar.GetLastSelectedFoundItem(entry_uuid);
+  if (iLastShown >= 0) {
+    CItemData *pci = &m_core.Find(entry_uuid)->second;
+    DisplayInfo *pdi = GetEntryGUIInfo(*pci);
+    m_LastFoundTreeItem = pdi->tree_item;
+    m_LastFoundListItem = pdi->list_index;
+
+    UpdateToolBarForSelectedItem(pci);
+    SetDCAText(pci);
+  }
+
+  if (iLastShown < 0 || m_LastFoundListItem < 0) {
+    // No item selected by Find or found item not in this view - select first entry
+    SelectFirstEntry();
+  }
 
   // Update Status Bar
   UpdateStatusBar();
@@ -222,30 +253,36 @@ void DboxMain::OnManageFilters()
   fkl.fpool = FPOOL_DATABASE;
   fkl.cs_filtername = L"";
 
-  if (!m_MapFilters.empty()) {
-    mf_lower_iter = m_MapFilters.lower_bound(fkl);
+  // Find & delete DB filters only
+  if (!m_MapAllFilters.empty()) {
+    mf_lower_iter = m_MapAllFilters.lower_bound(fkl);
 
     // Check that there are some first!
     if (mf_lower_iter->first.fpool == FPOOL_DATABASE) {
       // Now find upper bound of database filters
       fku.fpool = (FilterPool)((int)FPOOL_DATABASE + 1);
       fku.cs_filtername = L"";
-      mf_upper_iter = m_MapFilters.upper_bound(fku);
+      mf_upper_iter = m_MapAllFilters.upper_bound(fku);
 
       // Delete existing database filters (if any)
-      m_MapFilters.erase(mf_lower_iter, mf_upper_iter);
+      m_MapAllFilters.erase(mf_lower_iter, mf_upper_iter);
     }
   }
 
+  // Get current core filters
+  PWSFilters core_filters = m_core.GetDBFilters();
+  const PWSFilters original_core_filters = m_core.GetDBFilters();
+
   // Now add any existing database filters
-  for (mf_iter = m_core.m_MapFilters.begin();
-       mf_iter != m_core.m_MapFilters.end(); mf_iter++) {
-    m_MapFilters.insert(PWSFilters::Pair(mf_iter->first, mf_iter->second));
+  for (mf_iter = core_filters.begin();
+    mf_iter != core_filters.end(); mf_iter++) {
+    m_MapAllFilters.insert(PWSFilters::Pair(mf_iter->first, mf_iter->second));
   }
 
   bool bCanHaveAttachments = m_core.GetNumAtts() > 0;
 
-  CManageFiltersDlg mf(this, m_bFilterActive, m_MapFilters, bCanHaveAttachments);
+  // m_MapAllFilters will be updated by this dialog if user adds, deletes or changes a filter
+  CManageFiltersDlg mf(this, m_bFilterActive, m_MapAllFilters, bCanHaveAttachments);
   mf.SetCurrentData(m_currentfilterpool, CurrentFilter().fname.c_str());
   mf.DoModal();
 
@@ -253,22 +290,34 @@ void DboxMain::OnManageFilters()
   if (!mf.HasDBFiltersChanged())
     return;
 
-  m_core.m_MapFilters.clear();
+  // Clear core filters ready to replace with new ones
+  core_filters.clear();
 
-  if (!m_MapFilters.empty()) {
-    mf_lower_iter = m_MapFilters.lower_bound(fkl);
+  // Get DB filters populated via CManageFiltersDlg
+  if (!m_MapAllFilters.empty()) {
+    mf_lower_iter = m_MapAllFilters.lower_bound(fkl);
 
     // Check that there are some first!
     if (mf_lower_iter->first.fpool == FPOOL_DATABASE) {
       // Now find upper bound of database filters
       fku.fpool = (FilterPool)((int)FPOOL_DATABASE + 1);
       fku.cs_filtername = L"";
-      mf_upper_iter = m_MapFilters.upper_bound(fku);
+      mf_upper_iter = m_MapAllFilters.upper_bound(fku);
 
       // Copy database filters (if any) to the core
-      CopyDBFilters copy_db_filters(m_core.m_MapFilters);
+      CopyDBFilters copy_db_filters(core_filters);
       for_each(mf_lower_iter, mf_upper_iter, copy_db_filters);
     }
+  }
+
+  // However, we need to check as user may have edited the filter more thn once 
+  // and reverted any changes!
+  if (core_filters != original_core_filters) {
+    // Now update DB filters in core
+    Command *pcmd = DBFiltersCommand::Create(&m_core, core_filters);
+
+    // Do it
+    Execute(pcmd);
   }
 }
 
@@ -278,12 +327,12 @@ void DboxMain::ExportFilters(PWSFilters &Filters)
   INT_PTR rc;
 
   // do the export
-  //SaveAs-type dialog box
+  // SaveAs-type dialog box
   std::wstring XMLFileName = PWSUtil::GetNewFileName(m_core.GetCurFile().c_str(),
                                                   L"filters.xml");
   cs_text.LoadString(IDS_NAMEXMLFILE);
   std::wstring dir;
-  if (m_core.GetCurFile().empty())
+  if (!m_core.IsDbOpen())
     dir = PWSdirs::GetSafeDir();
   else {
     std::wstring cdrive, cdir, dontCare;
@@ -327,7 +376,7 @@ void DboxMain::ExportFilters(PWSFilters &Filters)
 
   CGeneralMsgBox gmb;
   if (rc == PWScore::CANT_OPEN_FILE) {
-    cs_temp.Format(IDS_CANTOPENWRITING, cs_newfile);
+    cs_temp.Format(IDS_CANTOPENWRITING, static_cast<LPCWSTR>(cs_newfile));
     cs_title.LoadString(IDS_FILEWRITEERROR);
     gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONWARNING);
   } else {
@@ -344,14 +393,14 @@ void DboxMain::ImportFilters()
 
   if (!pws_os::FileExists(XSDFilename)) {
     CGeneralMsgBox gmb;
-    cs_temp.Format(IDSC_MISSINGXSD, XSDfn.c_str());
+    cs_temp.Format(IDSC_MISSINGXSD, static_cast<LPCWSTR>(XSDfn.c_str()));
     cs_title.LoadString(IDSC_CANTVALIDATEXML);
     gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONSTOP);
     return;
   }
 
   std::wstring dir;
-  if (m_core.GetCurFile().empty())
+  if (!m_core.IsDbOpen())
     dir = PWSdirs::GetSafeDir();
   else {
     std::wstring cdrive, cdir, dontCare;
@@ -389,7 +438,7 @@ void DboxMain::ImportFilters()
     CWaitCursor waitCursor;  // This may take a while!
 
     MFCAsker q;
-    rc = m_MapFilters.ImportFilterXMLFile(FPOOL_IMPORTED, L"",
+    rc = m_MapAllFilters.ImportFilterXMLFile(FPOOL_IMPORTED, L"",
                                           std::wstring(XMLFilename),
                                           XSDFilename.c_str(), strErrors, &q);
     waitCursor.Restore();  // Restore normal cursor
@@ -397,17 +446,18 @@ void DboxMain::ImportFilters()
     UINT uiFlags = MB_OK | MB_ICONWARNING;
     switch (rc) {
       case PWScore::XML_FAILED_VALIDATION:
-        cs_temp.Format(IDS_FAILEDXMLVALIDATE, fd.GetFileName(),
-                       strErrors.c_str());
+        cs_temp.Format(IDS_FAILEDXMLVALIDATE, static_cast<LPCWSTR>(fd.GetFileName()),
+                       static_cast<LPCWSTR>(strErrors.c_str()));
         break;
       case PWScore::XML_FAILED_IMPORT:
-        cs_temp.Format(IDS_XMLERRORS, fd.GetFileName(), strErrors.c_str());
+        cs_temp.Format(IDS_XMLERRORS, static_cast<LPCWSTR>(fd.GetFileName()),
+                       static_cast<LPCWSTR>(strErrors.c_str()));
         break;
       case PWScore::SUCCESS:
         if (!strErrors.empty()) {
           std::wstring csErrors = strErrors + L"\n";
-          cs_temp.Format(IDS_XMLIMPORTWITHERRORS, fd.GetFileName(),
-                         csErrors.c_str());
+          cs_temp.Format(IDS_XMLIMPORTWITHERRORS, static_cast<LPCWSTR>(fd.GetFileName()),
+                         static_cast<LPCWSTR>(csErrors.c_str()));
         } else {
           cs_temp.LoadString(IDS_FILTERSIMPORTEDOK);
           uiFlags = MB_OK | MB_ICONINFORMATION;
@@ -422,4 +472,3 @@ void DboxMain::ImportFilters()
     gmb.MessageBox(cs_temp, cs_title, uiFlags);
   }
 }
-

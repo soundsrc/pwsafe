@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2013-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2013-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -11,7 +11,6 @@
 // PWSfileV4.h
 // Abstract the gory details of reading and writing an encrypted database
 //-----------------------------------------------------------------------------
-
 
 #include "PWSfile.h"
 #include "TwoFish.h"
@@ -29,8 +28,8 @@ public:
   
   static int CheckPasskey(const StringX &filename,
                           const StringX &passkey,
-                          FILE *a_fd = NULL,
-                          unsigned char *aPtag = NULL, uint32 *nIter = NULL);
+                          FILE *a_fd = nullptr,
+                          unsigned char *aPtag = nullptr, uint32 *nIter = nullptr);
   static bool IsV4x(const StringX &filename, const StringX &passkey, VERSION &v);
 
   PWSfileV4(const StringX &filename, RWmode mode, VERSION version);
@@ -48,7 +47,7 @@ public:
   // Following writes AttIV, AttEK, AttAK, AttContent
   // and AttContentHMAC per format spec.
   // All except the content are generated internally.
-  int WriteContentFields(unsigned char *content, size_t len);
+  size_t WriteContentFields(unsigned char *content, size_t len);
   // Following allocates content, caller responsible for deallocating
   size_t ReadContent(Fish *fish, unsigned char *cbcbuffer,
                      unsigned char *&content, size_t clen);
@@ -68,7 +67,7 @@ public:
     CKeyBlocks();
     CKeyBlocks(const CKeyBlocks &ckb);
     ~CKeyBlocks();
-    CKeyBlocks operator=(const CKeyBlocks &that);
+    CKeyBlocks & operator=(const CKeyBlocks &that);
     bool AddKeyBlock(const StringX &current_passkey, const StringX &new_passkey,
                      uint nHashIters = MIN_HASH_ITERATIONS);
     bool RemoveKeyBlock(const StringX &passkey); // fails if m_keyblocks.size() <= 1...
@@ -97,7 +96,7 @@ public:
     KeyBlock &at(unsigned i) {return m_kbs.at(i);}
     const KeyBlock &at(unsigned i) const {return m_kbs.at(i);}
     bool empty() const {return m_kbs.empty();}
-    unsigned size() const {return m_kbs.size();}
+    unsigned size() const {return (unsigned)m_kbs.size();}
     const size_t KBLEN = PWSaltLength + sizeof(uint32) + KWLEN + KWLEN;
   };
 

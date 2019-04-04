@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -12,6 +12,7 @@
 #include "stdafx.h"
 #include "PWPListEntries.h"
 #include "SecString.h"
+#include "Fonts.h"
 
 #include "resource.h"
 #include "resource3.h"
@@ -23,7 +24,8 @@ IMPLEMENT_DYNAMIC(CPWPListEntries, CPWDialog)
 CPWPListEntries::CPWPListEntries(CWnd* pParent, StringX sxPolicyName, 
   std::vector<st_GroupTitleUser> *pventries)
 	: CPWDialog(CPWPListEntries::IDD, pParent), m_sxPolicyName(sxPolicyName),
-  m_pventries(pventries), m_iSortedColumn(0),  m_bSortAscending(FALSE)
+  m_pventries(pventries), m_iSortedColumn(0),  m_bSortAscending(FALSE),
+  m_pAddEditFont(NULL)
 {
 }
 
@@ -55,6 +57,9 @@ BOOL CPWPListEntries::OnInitDialog()
   dwExtendedStyle |= LVS_EX_GRIDLINES;
   m_PolicyEntries.SetExtendedStyle(dwExtendedStyle);
 
+  m_pAddEditFont = Fonts::GetInstance()->GetAddEditFont();
+  m_PolicyEntries.SetFont(m_pAddEditFont);
+
   // Add columns
   CString cs_text;
   cs_text.LoadString(IDS_GROUP);
@@ -80,7 +85,7 @@ BOOL CPWPListEntries::OnInitDialog()
   m_PolicyEntries.SetColumnWidth(1, LVSCW_AUTOSIZE_USEHEADER);
   m_PolicyEntries.SetColumnWidth(2, LVSCW_AUTOSIZE_USEHEADER);
 
-  return FALSE;
+  return TRUE;  // return TRUE unless you set the focus to a control
 }
 
 void CPWPListEntries::OnHeaderClicked(NMHDR *pNotifyStruct, LRESULT *pLResult)
@@ -97,17 +102,6 @@ void CPWPListEntries::OnHeaderClicked(NMHDR *pNotifyStruct, LRESULT *pLResult)
     m_iSortedColumn = phdn->iItem;
     m_PolicyEntries.SortItems(CompareFunc, (LPARAM)this);
 
-    // Note: WINVER defines the minimum system level for which this is program compiled and
-    // NOT the level of system it is running on!
-    // In this case, these values are defined in Windows XP and later and supported
-    // by V6 of comctl32.dll (supplied with Windows XP) and later.
-    // They should be ignored by earlier levels of this dll or .....
-    //     we can check the dll version (code available on request)!
-
-#if (WINVER < 0x0501)  // These are already defined for WinXP and later
-#define HDF_SORTUP 0x0400
-#define HDF_SORTDOWN 0x0200
-#endif
     HDITEM HeaderItem;
     HeaderItem.mask = HDI_FORMAT;
     m_PolicyEntries.GetHeaderCtrl()->GetItem(m_iSortedColumn, &HeaderItem);

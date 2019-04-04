@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -12,13 +12,12 @@
 #ifndef _SAFECOMBINATIONPROMPT_H_
 #define _SAFECOMBINATIONPROMPT_H_
 
-
 /*!
  * Includes
  */
 
 ////@begin includes
-#include "wx/valgen.h"
+#include <wx/valgen.h>
 ////@end includes
 #include "core/PWScore.h"
 
@@ -54,7 +53,6 @@ class wxTimer;
 #define SYMBOL_CSAFECOMBINATIONPROMPT_SIZE wxSize(400, 300)
 #define SYMBOL_CSAFECOMBINATIONPROMPT_POSITION wxDefaultPosition
 ////@end control identifiers
-
 
 /*!
  * CSafeCombinationPrompt class declaration
@@ -103,6 +101,9 @@ public:
 
   /// wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CANCEL
   void OnCancelClick( wxCommandEvent& event );
+
+  /// wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_EXIT
+  void OnExitClick( wxCommandEvent& event );
 
 ////@begin CSafeCombinationPrompt member function declarations
 

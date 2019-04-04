@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -10,18 +10,16 @@
 * 
 */
 
-
 #ifndef _PASSWORDPOLICY_H_
 #define _PASSWORDPOLICY_H_
-
 
 /*!
  * Includes
  */
 
 ////@begin includes
-#include "wx/valgen.h"
-#include "wx/spinctrl.h"
+#include <wx/valgen.h>
+#include <wx/spinctrl.h>
 ////@end includes
 #include "core/coredefs.h"
 #include "core/PWPolicy.h"
@@ -62,13 +60,17 @@ class wxSpinCtrl;
 #define ID_CHECKBOX7 10122
 #define ID_CHECKBOX8 10123
 #define ID_CHECKBOX9 10124
+#define ID_CHECKBOX41 10331
+#define ID_COMBOBOX41 10332
+#define ID_GENERATEDPASSWORD 10333
+#define ID_GENERATEPASSWORD2 10334
+#define ID_COPYPASSWORD2 10335
 #define SYMBOL_CPASSWORDPOLICY_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX|wxDIALOG_MODAL|wxTAB_TRAVERSAL
 #define SYMBOL_CPASSWORDPOLICY_TITLE _("Password Policy")
 #define SYMBOL_CPASSWORDPOLICY_IDNAME ID_CPASSWORDPOLICY
 #define SYMBOL_CPASSWORDPOLICY_SIZE wxSize(400, 300)
 #define SYMBOL_CPASSWORDPOLICY_POSITION wxDefaultPosition
 ////@end control identifiers
-
 
 /*!
  * CPasswordPolicy class declaration
@@ -79,9 +81,12 @@ class CPasswordPolicy: public wxDialog
   DECLARE_EVENT_TABLE()
 
 public:
+  enum class DialogType { EDITOR, GENERATOR };
+  
   /// Constructors
   CPasswordPolicy( wxWindow* parent, PWScore &core,
                    const PSWDPolicyMap &polmap,
+                   DialogType type = DialogType::EDITOR,
                    wxWindowID id = SYMBOL_CPASSWORDPOLICY_IDNAME,
                    const wxString& caption = SYMBOL_CPASSWORDPOLICY_TITLE,
                    const wxPoint& pos = SYMBOL_CPASSWORDPOLICY_POSITION,
@@ -89,7 +94,7 @@ public:
                    long style = SYMBOL_CPASSWORDPOLICY_STYLE );
 
   /// Creation
-  bool Create( wxWindow* parent, wxWindowID id = SYMBOL_CPASSWORDPOLICY_IDNAME, const wxString& caption = SYMBOL_CPASSWORDPOLICY_TITLE, const wxPoint& pos = SYMBOL_CPASSWORDPOLICY_POSITION, const wxSize& size = SYMBOL_CPASSWORDPOLICY_SIZE, long style = SYMBOL_CPASSWORDPOLICY_STYLE );
+  bool Create( wxWindow* parent, DialogType type = DialogType::EDITOR, wxWindowID id = SYMBOL_CPASSWORDPOLICY_IDNAME, const wxString& caption = SYMBOL_CPASSWORDPOLICY_TITLE, const wxPoint& pos = SYMBOL_CPASSWORDPOLICY_POSITION, const wxSize& size = SYMBOL_CPASSWORDPOLICY_SIZE, long style = SYMBOL_CPASSWORDPOLICY_STYLE );
 
   /// Destructor
   ~CPasswordPolicy();
@@ -131,6 +136,21 @@ public:
 
   /// wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_HELP
   void OnHelpClick( wxCommandEvent& event );
+
+  /// wxEVT_COMMAND_CHECKBOX_CLICKED event handler for ID_CHECKBOX41
+  void OnUseNamedPolicy( wxCommandEvent& event );
+
+  /// wxEVT_COMMAND_COMBOBOX_CLICKED event handler for ID_COMBOBOX41
+  void OnPolicynameSelection( wxCommandEvent& event );
+
+  /// wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_GENERATEPASSWORD2
+  void OnGeneratePassword( wxCommandEvent& event );
+
+  /// wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_COPYPASSWORD2
+  void OnCopyPassword( wxCommandEvent& event );
+
+  /// wxEVT_SPINCTRL event handler for ID_SPINCTRL5, ID_SPINCTRL6, ID_SPINCTRL7, ID_SPINCTRL8
+  void OnAtLeastPasswordChars(wxSpinEvent& evt);
 
 ////@end CPasswordPolicy event handler declarations
 
@@ -191,7 +211,12 @@ public:
   /// Should we show tooltips?
   static bool ShowToolTips();
 
+private:
+  void EnableSizerChildren(wxSizer* sizer, bool state);
+
 ////@begin CPasswordPolicy member variables
+  /* Controls for DialogType EDITOR */
+  wxSpinCtrl* m_pwpLenCtrl;
   wxGridSizer* m_pwMinsGSzr;
   wxCheckBox* m_pwpUseLowerCtrl;
   wxBoxSizer* m_pwNumLCbox;
@@ -209,7 +234,14 @@ public:
   wxCheckBox* m_pwpEasyCtrl;
   wxCheckBox* m_pwpPronounceCtrl;
   wxCheckBox* m_pwpHexCtrl;
-private:
+
+  /* Additional controls for DialogType GENERATOR */
+  wxCheckBox* m_pwpUseNamedPolicyCtrl;
+  wxComboBox* m_pwpPoliciesSelectionCtrl;
+  wxTextCtrl* m_passwordCtrl;
+  wxArrayString m_Policynames;
+  wxStaticBoxSizer* m_itemStaticBoxSizer6;
+
   wxString m_Symbols;
   wxString m_polname;
   int m_pwDigitMinLength;
@@ -232,6 +264,7 @@ private:
 
   PWScore &m_core;
   const PSWDPolicyMap &m_MapPSWDPLC; // used to detect existing name
+  DialogType m_DialogType;
   wxString m_oldpolname;
   int m_oldpwdefaultlength;
   bool m_oldpwUseLowercase;

@@ -83,10 +83,6 @@
 #define IDI_SBASE_EXPIRED               194
 #define IDI_SBASE_WARNEXPIRED           195
 #define IDI_SHORTCUT                    196
-#define IDI_TRAY                        205
-#define IDI_TRAY_BLUE                   206
-#define IDI_TRAY_WHITE                  207
-#define IDI_TRAY_YELLOW                 208
 #define IDI_UNLOCKEDICON                209
 #define IDR_POPLANGUAGES                210
 #define IDR_POPCOPYALLTOORIGINAL        211
@@ -270,6 +266,7 @@
 #define IDB_UNCHECKED                   427
 #define IDB_EMPTY                       428
 #define IDB_BLANK                       429
+#define IDB_CHECKED_DISABLED            430
 #define IDB_DRAGGROUP_NEW               431
 #define IDB_DRAGTITLE_NEW               432
 #define IDB_DRAGUSER_NEW                433
@@ -308,6 +305,7 @@
 #define IDD_ADDEDIT_ADDITIONAL          466
 #define IDD_ADDEDIT_DATETIMES           467
 #define IDD_ADDEDIT_PASSWORDPOLICY      468
+#define IDB_UNCHECKED_DISABLED          469
 #define IDB_EXCLAMATION                 470
 #define IDB_CHANGEVKBDFONTMENU_CLASSIC  471
 #define IDB_CHANGEVKBDFONTMENU_NEW      472
@@ -317,7 +315,6 @@
 #define IDB_DRAGEMAIL_CLASSIC           476
 #define IDB_DRAGEMAILX_CLASSIC          477
 #define IDB_UNDO_CLASSIC                478
-#define IDD_ALIAS_PSWDCHANGE            479
 #define IDB_REDO_CLASSIC                480
 #define IDB_UNDO_NEW                    481
 #define IDB_REDO_NEW                    482
@@ -385,6 +382,20 @@
 #define IDB_EXPORTV4_NEW                544
 #define IDB_EXPORTV4_NEW_D              545
 #define IDD_NPWP_LIST_ENTRIES           546
+#define IDB_QUESTIONMARK                547
+#define IDD_VIEWATTACHMENT              548
+#define IDB_EMPTY_DISABLED              549
+#define IDB_REDEXCLAMATION              550
+#define IDB_LOCK_CLASSIC                551
+#define IDD_SETDBID                     552
+#define IDB_BLACK                       553
+#define IDB_RED                         554
+#define IDB_GREEN                       555
+#define IDB_WHITE                       556
+#define IDB_YELLOW                      557
+#define IDB_LOCKED_TRAY_INDEX           558
+#define IDB_UNLOCKED_TRAY_INDEX         559
+#define IDB_COPYPASSWORD_CLASSIC_D      560
 #define IDC_APPVERSION                  1000
 #define IDC_VERSION                     1001
 #define IDC_APPVERSION2                 1002
@@ -397,6 +408,8 @@
 #define IDC_USERNAME                    1010
 #define IDC_NOTES                       1011
 #define IDC_ITEMLIST                    1012
+#define IDC_HIDDEN_NOTES                1012
+#define IDC_NOTES2                      1012
 #define IDC_ITEMTREE                    1013
 #define IDC_SHOWPASSWORD                1014
 #define IDC_CLEARCHECK                  1015
@@ -496,11 +509,14 @@
 #define IDC_RESPIN                      1132
 #define IDC_MRUSPIN                     1133
 #define IDC_PWHSPIN                     1134
+#define IDC_PWHSPIN2                    1135
+#define IDC_DEDSPIN                     1135
 #define IDC_PWHISTORY_LIST              1136
 #define IDC_SAVEPWHISTORY               1137
 #define IDC_MAXPWHISTORY                1138
 #define IDC_DEFPWHNUM                   1139
 #define IDC_COPY_OLDPW_TO_CLIPBOARD     1140
+#define IDC_DEFEXPIRYDAYS               1140
 #define IDC_CLEAR_PWHIST                1141
 #define IDC_SAVE_PWHIST                 1143
 #define IDC_STATIC_OLDPW1               1144
@@ -540,6 +556,8 @@
 #define IDC_SAVEDAPP                    1197
 #define IDC_NUMATTACHMENTS              1198
 #define IDC_BACKUPBEFORESAVE            1199
+#define IDC_SAVEDON2                    1199
+#define IDC_PWDSETON                    1199
 #define IDC_DFLTBACKUPPREFIX            1200
 #define IDC_USERBACKUPPREFIX            1201
 #define IDC_USERBACKUPPREFIXVALUE       1202
@@ -590,14 +608,10 @@
 #define IDC_RECORDUNKNOWNFIELDS         1265
 #define IDC_STATIC_RECORDUNKNOWNFIELDS  1266
 #define IDC_STATICGROUPRUNKNFLDS        1267
-#define IDC_VIEWDEPENDENTS              1268
+#define IDC_LISTDEPENDENTS              1268
 #define IDC_STATIC_ISANALIAS            1269
 #define IDC_NEWVER_STATUS               1272
 #define IDC_VISIT_WEBSITE               1273
-#define IDC_RST_BLK                     1276
-#define IDC_RST_BLUE                    1277
-#define IDC_RST_WHITE                   1278
-#define IDC_RST_YELLOW                  1279
 #define IDC_SAMPLETEXT                  1283
 #define IDC_TREATWHITESPACEASEMPTY      1284
 #define IDC_STATIC_LC1                  1285
@@ -670,7 +684,7 @@
 #define IDC_STATIC_EMAIL                1356
 #define IDC_STATIC_AUTO                 1357
 #define IDC_STATIC_RUNCMD               1358
-#define IDC_SUBSET                      1359
+#define IDC_SUBSETPOSITIONS             1359
 #define IDC_GETSUBSET                   1360
 #define IDC_SUBSETRESULTS               1361
 #define IDC_STATICSUBSETWARNING         1362
@@ -749,6 +763,7 @@
 #define IDC_STATIC_IDLEMINS             1445
 #define IDC_STATIC_NUMPWSDHIST          1446
 #define IDC_STATIC_DEFAUTOTYPE          1447
+#define IDC_STATIC_DEFEXPIRYDAYS        1447
 #define IDC_STATIC_PSWDLENGTH           1448
 #define IDC_SHIFT_DOUBLE_CLICK_ACTION   1449
 #define IDC_STATIC_PREFERENCES          1451
@@ -784,7 +799,6 @@
 #define IDC_STATIC_NAMEDPOLICY          1482
 #define IDC_POLICYNAMES_HEADER          1483
 #define IDC_POLICYENTRIES_HEADER        1484
-#define IDC_STATIC_COPYPSWD             1485
 #define IDC_UNDO                        1486
 #define IDC_REDO                        1487
 #define IDC_CLEARPWHISTORY              1488
@@ -825,14 +839,73 @@
 #define IDC_CMB_AVALIABLEMEDIATYPES     1524
 #define IDC_STATIC_TUTORIAL             1525
 #define IDC_NPWP_LIST_ENTRIES           1526
+#define IDC_BACKUPBEFORESAVEHELP        1527
+#define IDC_USERBACKUPOTHERLOCATIONHELP 1528
+#define IDC_SAVEIMMEDIATELYHELP         1529
+#define IDC_MAINTAINDATETIMESTAMPSHELP  1530
+#define IDC_OTHERBROWSERLOCATIONHELP    1531
+#define IDC_OTHEREDITORLOCATIONHELP     1532
+#define IDC_RESETPWHISTORYOFFHELP       1533
+#define IDC_RESETPWHISTORYONHELP        1534
+#define IDC_SETMAXPWHISTORYHELP         1535
+#define IDC_CLEARPWHISTORYHELP          1536
+#define IDC_SHORTCUTLISTHELP            1537
+#define IDC_ENTSHORTCUTLISTHELP         1538
+#define IDC_REGDELHELP                  1539
+#define IDC_MIGRATETOAPPDATAHELP        1541
+#define IDC_STATIC_INITIALTREEVIEW      1542
+#define IDC_STATIC_UNLOCKDIFFICULTY     1543
+#define IDC_STATIC_MANAGEPWH            1544
+#define IDC_LOCKONMINIMIZEHELP          1545
+#define IDC_LOCKONWORKSTATIONLOCKHELP   1546
+#define IDC_LOCKONIDLEHELP              1547
+#define IDC_ZOOM                        1548
+#define IDC_ZOOM_VALUE                  1549
+#define IDC_IMAGE_HSCROLL               1550
+#define IDC_IMAGE_VSCROLL               1551
+#define IDC_EXPORTFILTERS               1552
+#define IDC_EXPANDEDUSERBACKUPOTHRLOC   1553
+#define IDC_USERBACKUPOTHERLOCATIONHELP2 1554
+#define IDC_SMARTLABELHELP              1555
+#define IDC_PASSWORDHELP                1556
+#define IDC_NOTESHELP                   1557
+#define IDC_AUTOTYPEHELP                1558
+#define IDC_PASSWORDHELP2               1559
+#define IDC_PWHHELP                     1560
+#define IDC_STATIC_HOSTUSER             1561
+#define IDC_STATIC_DEPENDENT            1562
+#define IDC_DBINDEX                     1563
+#define IDC_SETCOLOUR                   1564
+#define IDC_UNLOCKEDIMAGE               1565
+#define IDC_LOCKEDIMAGE                 1566
+#define IDC_DBINDEX_TEXTCOLOURL0        1567
+#define IDC_DBINDEX_TEXTCOLOURL1        1568
+#define IDC_DBINDEX_TEXTCOLOURL2        1579
+#define IDC_DBINDEX_TEXTCOLOURL3        1580
+#define IDC_DBINDEX_TEXTCOLOURUL0       1581
+#define IDC_DBINDEX_TEXTCOLOURUL1       1582
+#define IDC_DBINDEX_TEXTCOLOURUL2       1583
+#define IDC_DBINDEX_TEXTCOLOURUL3       1584
+#define IDC_COPYPASSWORDHELP            1585
+#define IDC_COPYPASSWORDHELP1           1586
+#define IDC_COPYPASSWORDHELP2           1587
+#define IDC_STATIC_MESSAGE              1588
+#define IDC_ALTEDITOR_CMDLINE           1589
+#define IDC_SHOWCOMBINATION             1590
+#define IDC_ENABLETRANSPARENCY          1591
+#define IDC_TRANSPARENCY                1592
+#define IDC_TRANSPARENCYHELP            1593
+#define IDC_STATIC_MAXTRANSPARENCY      1594
+#define IDC_STATIC_MINTRANSPARENCY      1595
+#define IDC_TESTTRANSPARENCY            1596
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        547
+#define _APS_NEXT_RESOURCE_VALUE        561
 #define _APS_NEXT_COMMAND_VALUE         30001
-#define _APS_NEXT_CONTROL_VALUE         1527
-#define _APS_NEXT_SYMED_VALUE           540
+#define _APS_NEXT_CONTROL_VALUE         1597
+#define _APS_NEXT_SYMED_VALUE           557
 #endif
 #endif

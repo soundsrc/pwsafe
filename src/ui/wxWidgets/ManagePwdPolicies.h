@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -10,10 +10,8 @@
 * 
 */
 
-
 #ifndef _MANAGEPWDPOLICIES_H_
 #define _MANAGEPWDPOLICIES_H_
-
 
 /*!
  * Includes
@@ -26,6 +24,7 @@
 #include "core/PWPolicy.h"
 #include "core/StringX.h"
 #include "core/PWScore.h"
+#include "core/PolicyManager.h"
 
 #include <vector>
 
@@ -61,7 +60,6 @@ class wxGrid;
 #define SYMBOL_CMANAGEPASSWORDPOLICIES_SIZE wxSize(400, 300)
 #define SYMBOL_CMANAGEPASSWORDPOLICIES_POSITION wxDefaultPosition
 ////@end control identifiers
-
 
 /*!
  * CManagePasswordPolicies class declaration
@@ -102,7 +100,7 @@ public:
   void OnNewClick( wxCommandEvent& event );
 
   /// wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_EDIT_PP
-  void OnEditPpClick( wxCommandEvent& event );
+  void OnEditClick( wxCommandEvent& event );
 
   /// wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_DELETE
   void OnDeleteClick( wxCommandEvent& event );
@@ -133,6 +131,10 @@ public:
 
 ////@end CManagePasswordPolicies event handler declarations
 
+  void OnSize(wxSizeEvent& event);
+  
+  void OnMaximize(wxMaximizeEvent& event);
+
 ////@begin CManagePasswordPolicies member function declarations
 
   /// Retrieves bitmap resources
@@ -158,21 +160,17 @@ public:
  private:
   void UpdateNames();
   void UpdateDetails();
-  void UpdatePolicy(const wxString &polname, const PWPolicy &pol, CPP_FLAGS mode); // called after New/Edit
+  void UpdateEntryList();
+  void UpdateSelection(const wxString& policyname);
+  void UpdateUndoRedoButtons();
   void ShowPolicyDetails();
   void ShowPolicyEntries();
   PWPolicy GetSelectedPolicy() const;
   int GetSelectedRow() const;
+  void ResizeGridColumns();
 
   PWScore &m_core;
-  // History of current changes for Undo/Redo and index to current change
-  // that can be undone. Note: if this is less that the size of the vector
-  // of saved changes, then there are changes that can be redone.
-  std::vector<st_PSWDPolicyChange> m_vchanges;
-  int m_iundo_pos;
 
-  PSWDPolicyMap m_MapPSWDPLC;
-  PWPolicy m_st_default_pp;
   int m_curPolRow;
 
   int m_iSortNamesIndex, m_iSortEntriesIndex;
@@ -180,7 +178,13 @@ public:
 
   bool m_bViewPolicy;
   
+  bool m_bShowPolicyEntriesInitially;
+  
   bool m_bUndoShortcut, m_bRedoShortcut;
+  
+  int m_ScrollbarWidth;
+  
+  std::unique_ptr<PolicyManager> m_PolicyManager;
 };
 
 #endif

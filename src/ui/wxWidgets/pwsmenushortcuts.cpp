@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -82,12 +82,12 @@ st_prefShortcut MenuItemData::ToPrefShortcut() const
   st_prefShortcut sc;
 
   sc.id = m_menuId;
-  wxASSERT_MSG(sc.id != 0, wxT("Trying to save shortcut with NULL menu item id"));
+  wxASSERT_MSG(sc.id != 0, wxT("Trying to save shortcut with nullptr menu item id"));
   sc.siVirtKey = ae.GetKeyCode();
-  sc.cModifier = 0;
+  sc.cPWSModifier = 0;
   for (size_t idx = 0; idx < WXSIZEOF(g_modmap); ++idx)
     if ((ae.GetFlags() & g_modmap[idx].wxmod) != 0)
-      sc.cModifier |= g_modmap[idx].prefsmod;
+      sc.cPWSModifier |= g_modmap[idx].prefsmod;
 
   return sc;
 }
@@ -96,14 +96,14 @@ void MenuItemData::SetUserShortcut(const st_prefShortcut& prefAccel, bool setdir
 {
   int flags = 0;
   for (size_t idx = 0; idx < WXSIZEOF(g_modmap); ++idx)
-    if ((prefAccel.cModifier & g_modmap[idx].prefsmod) != 0)
+    if ((prefAccel.cPWSModifier & g_modmap[idx].prefsmod) != 0)
       flags |= g_modmap[idx].wxmod;
 
   SetUserShortcut( wxAcceleratorEntry(flags, prefAccel.siVirtKey, prefAccel.id), setdirty );
 }
 
 /*
- * The only way to change the shortcut.  Specify a NULL accel to remove the user-specified
+ * The only way to change the shortcut.  Specify a nullptr accel to remove the user-specified
  * shortcut, if any, or the original shortcut.
  */
 void MenuItemData::SetUserShortcut(const wxAcceleratorEntry& userAccel, bool setdirty /* = true */)
@@ -275,7 +275,6 @@ struct ApplyEditedShortcuts {
   }
 };
 
-
 bool IsFunctionKey(int keycode)
 {
   return keycode >= WXK_F1 && keycode <= WXK_F24;
@@ -398,7 +397,6 @@ void PWSMenuShortcuts::ChangeShortcutAt(size_t idx, const wxAcceleratorEntry& ne
   m_midata[idx].SetUserShortcut(newEntry);
 }
 
-
 int ModifiersToAccelFlags(int mods)
 {
   struct mod_accel_map_t {
@@ -434,7 +432,7 @@ void PWSMenuShortcuts::ReadApplyUserShortcuts()
   typedef std::vector<st_prefShortcut> userShortcut_t;
   const std::vector<st_prefShortcut>& userShortcuts = PWSprefs::GetInstance()->GetPrefShortcuts();
   for (userShortcut_t::const_iterator usrItr = userShortcuts.begin(); usrItr != userShortcuts.end(); ++usrItr) {
-    MenuItemDataArray::iterator itr = std::find_if(m_midata.begin(), m_midata.end(),
+    auto itr = std::find_if(m_midata.begin(), m_midata.end(),
                             std::bind1st(SameShortcutTarget(), *usrItr));
     if (itr != m_midata.end()) {
       itr->SetUserShortcut(*usrItr);
@@ -442,7 +440,7 @@ void PWSMenuShortcuts::ReadApplyUserShortcuts()
     }
     else {
       pws_os::Trace(L"Could not find menu item id=[%d], for saved shortcut {key=[%d], mods=[%d]}",
-                    usrItr->id, usrItr->siVirtKey, usrItr->cModifier);
+                    usrItr->id, usrItr->siVirtKey, usrItr->cPWSModifier);
     }
   }
 }
@@ -548,12 +546,12 @@ void PWSMenuShortcuts::SetShorcutsGridEventHandlers(wxGrid* grid, wxButton* rese
   m_shortcutGridStatus.resize(m_midata.size());
   std::transform(m_midata.begin(), m_midata.end(), m_shortcutGridStatus.begin(), std::mem_fun_ref(&MenuItemData::GetStatus));
 
-  grid->Connect(wxEVT_GRID_CELL_CHANGED, wxGridEventHandler(PWSMenuShortcuts::OnShortcutChange), NULL, this);
-  grid->Connect(wxEVT_GRID_CELL_RIGHT_CLICK, wxGridEventHandler(PWSMenuShortcuts::OnShortcutRightClick), NULL, this);
+  grid->Connect(wxEVT_GRID_CELL_CHANGED, wxGridEventHandler(PWSMenuShortcuts::OnShortcutChange), nullptr, this);
+  grid->Connect(wxEVT_GRID_CELL_RIGHT_CLICK, wxGridEventHandler(PWSMenuShortcuts::OnShortcutRightClick), nullptr, this);
   //let's not directly connect to the grid for key events.  We'll only handle what bubbles up to us
-  grid->GetGridWindow()->Connect(grid->GetGridWindow()->GetId(), wxEVT_KEY_DOWN, wxKeyEventHandler(PWSMenuShortcuts::OnShortcutKey), NULL, this);
-  grid->GetGridWindow()->Connect(grid->GetGridWindow()->GetId(), wxEVT_CHAR, wxCharEventHandler(PWSMenuShortcuts::OnKeyChar), NULL, this);
-  resetAllButton->Connect(resetAllButton->GetId(), wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(PWSMenuShortcuts::OnResetAll), NULL, this);
+  grid->GetGridWindow()->Connect(grid->GetGridWindow()->GetId(), wxEVT_KEY_DOWN, wxKeyEventHandler(PWSMenuShortcuts::OnShortcutKey), nullptr, this);
+  grid->GetGridWindow()->Connect(grid->GetGridWindow()->GetId(), wxEVT_CHAR, wxCharEventHandler(PWSMenuShortcuts::OnKeyChar), nullptr, this);
+  resetAllButton->Connect(resetAllButton->GetId(), wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(PWSMenuShortcuts::OnResetAll), nullptr, this);
   m_shortcutsGrid = grid;
 }
 
@@ -655,7 +653,7 @@ void PWSMenuShortcuts::OnShortcutRightClick( wxGridEvent& evt )
   shortcutsMenu.Connect( shortcutsMenu.FindItemByPosition(0)->GetId(),
                           wxEVT_COMMAND_MENU_SELECTED,
                           wxCommandEventHandler(PWSMenuShortcuts::OnResetRemoveShortcut),
-                          NULL, this );
+                          nullptr, this );
   gr.grid->PopupMenu(&shortcutsMenu);
 }
 
@@ -667,7 +665,7 @@ void PWSMenuShortcuts::OnResetRemoveShortcut( wxCommandEvent& evt )
 {
   wxMenu* shortcutsMenu = wxDynamicCast(evt.GetEventObject(), wxMenu);
   wxCHECK_RET(shortcutsMenu, wxT("Could not get shortcuts reset/remove menu from event"));
-  GridAndIndex* gr = reinterpret_cast<GridAndIndex*>(shortcutsMenu->GetClientData());
+  auto *gr = reinterpret_cast<GridAndIndex*>(shortcutsMenu->GetClientData());
   wxCHECK_RET(gr, wxT("Could not find internal data in reset/remove handler"));
   GridResetOrRemoveShortcut(gr->grid, gr->index);
 }
@@ -771,5 +769,3 @@ bool ShortcutsGridValidator::Validate(wxWindow* parent)
   }
   return true;
 }
-
-

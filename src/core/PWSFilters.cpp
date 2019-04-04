@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -56,7 +56,7 @@ static void GetFilterTestXML(const st_FilterRow &st_fldata,
                              ostringstream &oss, bool bFile)
 {
   CUTF8Conv utf8conv;
-  const unsigned char *utf8 = NULL;
+  const unsigned char *utf8 = nullptr;
   size_t utf8Len = 0;
 
   const char *sztab4, *sztab5, *szendl;
@@ -184,7 +184,7 @@ static string GetFilterXML(const st_filters &filters, bool bWithFormatting)
   ostringstream oss; // ALWAYS a string of chars, never wchar_t!
 
   CUTF8Conv utf8conv;
-  const unsigned char *utf8 = NULL;
+  const unsigned char *utf8 = nullptr;
   size_t utf8Len = 0;
   const char *sztab1, *sztab2, *sztab3, *sztab4, *szendl;
   if (bWithFormatting) {
@@ -553,14 +553,16 @@ struct XMLFilterWriterToString {
   XMLFilterWriterToString(coStringXStream &os, bool bWithFormatting) :
   m_os(os), m_bWithFormatting(bWithFormatting)
   {}
+
   // operator
-  void operator()(pair<const st_Filterkey, st_filters> p)
+  void operator()(const pair<const st_Filterkey, st_filters> &p)
   {
     string xml = GetFilterXML(p.second, m_bWithFormatting);
     m_os << xml.c_str();
   }
+
 private:
-  XMLFilterWriterToString& operator=(const XMLFilterWriterToString&); // Do not implement
+  XMLFilterWriterToString& operator=(const XMLFilterWriterToString&) = delete;
   coStringXStream &m_os;
   bool m_bWithFormatting;
 };
@@ -570,7 +572,7 @@ int PWSFilters::WriteFilterXMLFile(const StringX &filename,
                                    const StringX &currentfile)
 {
   FILE *xmlfile = pws_os::FOpen(filename.c_str(), _T("wt"));
-  if (xmlfile == NULL)
+  if (xmlfile == nullptr)
     return PWScore::CANT_OPEN_FILE;
 
   coStringXStream oss;
@@ -604,7 +606,7 @@ std::string PWSFilters::GetFilterXMLHeader(const StringX &currentfile,
                                            const PWSfileHeader &hdr)
 {
   CUTF8Conv utf8conv;
-  const unsigned char *utf8 = NULL;
+  const unsigned char *utf8 = nullptr;
   size_t utf8Len = 0;
 
   ostringstream oss;
@@ -772,7 +774,7 @@ stringT PWSFilters::GetFilterDescription(const st_FilterRow &st_fldata)
         Format(cs_criteria, L"%ls", cs_rule.c_str());
       else {
         stringT cs_delim(L"");
-        if (cs1.find(L" ") != stringT::npos)
+        if (cs1.find(L' ') != stringT::npos)
           cs_delim = L"'";
         Format(cs_criteria, L"%ls %ls%ls%ls %ls", 
                cs_rule.c_str(), cs_delim.c_str(), 
@@ -870,8 +872,8 @@ PWSFilterManager::PWSFilterManager()
     fr.fdate1 = 0;
     m_expirefilter.vMfldata.push_back(fr);
     m_expirefilter.num_Mactive = (int)m_expirefilter.vMfldata.size();
-
   }
+
   {
     LoadAString(m_unsavedfilter.fname, IDSC_NONSAVEDCHANGES);
 
@@ -889,6 +891,25 @@ PWSFilterManager::PWSFilterManager()
     m_unsavedfilter.vMfldata.push_back(fr);
     m_unsavedfilter.num_Mactive = (int)m_unsavedfilter.vMfldata.size();
   }
+
+  {
+    LoadAString(m_lastfoundfilter.fname, IDSC_FOUNDENTRIESFILTER);
+
+    // Actual values not needed as matching done by UUID
+    st_FilterRow fr;
+
+    fr.bFilterComplete = true;
+    fr.ftype = FT_INVALID;
+    fr.mtype = PWSMatch::MT_INVALID;
+    fr.rule = PWSMatch::MR_INVALID;
+    fr.ltype = LC_OR;
+
+    fr.fdate1 = 0;
+    m_lastfoundfilter.vMfldata.push_back(fr);
+    m_lastfoundfilter.num_Mactive = (int)m_lastfoundfilter.vMfldata.size();
+  }
+
+  m_bFindFilterActive = false;
 }
 
 void PWSFilterManager::CreateGroups()
@@ -1036,6 +1057,14 @@ void PWSFilterManager::CreateGroups()
     m_vAflgroups.clear();
 }
 
+void PWSFilterManager::SetFilterFindEntries(std::vector<pws_os::CUUID> *pvFoundUUIDs)
+{
+  if (pvFoundUUIDs == nullptr)
+    m_vFltrFoundUUIDs.clear();
+  else
+    m_vFltrFoundUUIDs = *pvFoundUUIDs;
+}
+
 bool PWSFilterManager::PassesFiltering(const CItemData &ci, const PWScore &core)
 {
   bool thistest_rc;
@@ -1045,6 +1074,11 @@ bool PWSFilterManager::PassesFiltering(const CItemData &ci, const PWScore &core)
 
   if (!m_currentfilter.IsActive())
     return true;
+
+  if (m_bFindFilterActive) {
+    return (std::find(m_vFltrFoundUUIDs.begin(), m_vFltrFoundUUIDs.end(),
+                      ci.GetUUID()) != m_vFltrFoundUUIDs.end());
+  }
 
   const CItemData::EntryType entrytype = ci.GetEntryType();
 
@@ -1064,8 +1098,8 @@ bool PWSFilterManager::PassesFiltering(const CItemData &ci, const PWScore &core)
       thistest_rc = false;
 
       PWSMatch::MatchType mt(PWSMatch::MT_INVALID);
-      const FieldType ft = m_currentfilter.vMfldata[num].ftype;
-      const int ifunction = (int)st_fldata.rule;
+      const FieldType ft = st_fldata.ftype;
+      const auto ifunction = (int)st_fldata.rule;
 
       switch (ft) {
         case FT_GROUPTITLE:
@@ -1195,7 +1229,7 @@ bool PWSFilterManager::PassesFiltering(const CItemData &ci, const PWScore &core)
             if (ifunction == PWSMatch::MR_BETWEEN)
               t2 = now + (st_fldata.fnum2 * 86400);
           }
-          thistest_rc = pci->Matches(t1, t2,
+          thistest_rc = pci->MatchesTime(t1, t2,
                                      (int)ft, ifunction);
           tests++;
           break;
@@ -1261,6 +1295,58 @@ bool PWSFilterManager::PassesFiltering(const CItemData &ci, const PWScore &core)
   return false;
 }
 
+bool PWSFilterManager::PassesEmptyGroupFiltering(const StringX &sxGroup)
+{
+  bool thistest_rc;
+
+  if (!m_currentfilter.IsActive())
+    return true;
+
+  for (auto groups_iter = m_vMflgroups.begin();
+       groups_iter != m_vMflgroups.end(); groups_iter++) {
+    const vfiltergroup &group = *groups_iter;
+
+    int tests(0);
+    bool thisgroup_rc = false;
+    for (auto iter = group.begin();
+         iter != group.end(); iter++) {
+      const int &num = *iter;
+      if (num == -1) // Padding to ensure group size is correct for FT_PWHIST & FT_POLICY
+        continue;
+
+      const st_FilterRow &st_fldata = m_currentfilter.vMfldata.at(num);
+      thistest_rc = false;
+
+      const FieldType ft = m_currentfilter.vMfldata[num].ftype;
+      const auto ifunction = (int)st_fldata.rule;
+
+      // We are only testing the group value and, as an empty group, it must be present
+      if (ft != FT_GROUP || ifunction == PWSMatch::MR_PRESENT || ifunction == PWSMatch::MR_NOTPRESENT) {
+        continue;
+      }
+
+      thistest_rc = PWSMatch::Match(st_fldata.fstring, sxGroup,
+                                    st_fldata.fcase ? -ifunction : ifunction);
+      tests++;   
+
+      if (tests <= 1)
+        thisgroup_rc = thistest_rc;
+      else {
+        //Within groups, tests are always "AND" connected
+        thisgroup_rc = thistest_rc && thisgroup_rc;
+      }
+    }
+
+    // This group of tests completed -
+    //   if 'thisgroup_rc == true', leave now; else go on to next group
+    if (thisgroup_rc)
+      return true;
+  }
+
+  // We finished all the groups and haven't found one that is true - exclude entry.
+  return false;
+}
+
 bool PWSFilterManager::PassesPWHFiltering(const CItemData *pci) const
 {
   bool thistest_rc, bPresent;
@@ -1300,7 +1386,7 @@ bool PWSFilterManager::PassesPWHFiltering(const CItemData *pci) const
           mt = PWSMatch::MT_BOOL;
           break;
         case HT_ACTIVE:
-          bValue = status == TRUE;
+          bValue = status;
           mt = PWSMatch::MT_BOOL;
           break;
         case HT_NUM:
@@ -1321,7 +1407,7 @@ bool PWSFilterManager::PassesPWHFiltering(const CItemData *pci) const
           ASSERT(0);
       }
 
-      const int ifunction = (int)st_fldata.rule;
+      const auto ifunction = (int)st_fldata.rule;
       switch (mt) {
         case PWSMatch::MT_STRING:
           for (auto pwshe_iter = pwhistlist.begin(); pwshe_iter != pwhistlist.end(); pwshe_iter++) {
@@ -1448,7 +1534,7 @@ bool PWSFilterManager::PassesPWPFiltering(const CItemData *pci) const
           ASSERT(0);
       }
 
-      const int ifunction = (int)st_fldata.rule;
+      const auto ifunction = (int)st_fldata.rule;
       switch (mt) {
         case PWSMatch::MT_INTEGER:
           thistest_rc = PWSMatch::Match(st_fldata.fnum1, st_fldata.fnum2,
@@ -1482,21 +1568,17 @@ bool PWSFilterManager::PassesPWPFiltering(const CItemData *pci) const
 
 bool PWSFilterManager::PassesAttFiltering(const CItemData *pci, const PWScore &core) const
 {
-  bool thistest_rc, bPresent;
+  bool thistest_rc;
+  const bool bPresent = pci->HasAttRef();
   bool bValue(false);
 
-  bPresent = pci->HasAttRef();
   
-  // Only reference att if bPresent is true
-  const CItemAtt &att = core.GetAtt(pci->GetAttUUID());
-
   for (auto group_iter = m_vAflgroups.begin();
        group_iter != m_vAflgroups.end(); group_iter++) {
     const vfiltergroup &group = *group_iter;
 
     int tests(0);
     bool thisgroup_rc = false;
-    vfiltergroup::const_iterator Fltnum_citer;
     for (auto num_iter = group.begin();
       num_iter != group.end(); num_iter++) {
       const int &num = *num_iter;
@@ -1530,7 +1612,7 @@ bool PWSFilterManager::PassesAttFiltering(const CItemData *pci, const PWScore &c
           ASSERT(0);
       }
 
-      const int ifunction = (int)st_fldata.rule;
+      const auto ifunction = (int)st_fldata.rule;
       switch (mt) {
         case PWSMatch::MT_BOOL:
           thistest_rc = PWSMatch::Match(bValue, ifunction);
@@ -1538,6 +1620,8 @@ bool PWSFilterManager::PassesAttFiltering(const CItemData *pci, const PWScore &c
           break;
         case PWSMatch::MT_STRING:
           if (bPresent) {
+            const CItemAtt &att = core.GetAtt(pci->GetAttUUID());
+
             thistest_rc = att.Matches(st_fldata.fstring.c_str(), (int)ft,
               st_fldata.fcase ? -ifunction : ifunction);
           } else {
@@ -1547,6 +1631,8 @@ bool PWSFilterManager::PassesAttFiltering(const CItemData *pci, const PWScore &c
           break;
         case PWSMatch::MT_DATE:
           if (bPresent) {
+            const CItemAtt &att = core.GetAtt(pci->GetAttUUID());
+
             time_t t1(st_fldata.fdate1), t2(st_fldata.fdate2);
             if (st_fldata.fdatetype == 1 /* Relative */) {
               time_t now;
@@ -1581,4 +1667,3 @@ bool PWSFilterManager::PassesAttFiltering(const CItemData *pci, const PWScore &c
   // We finished all the groups and haven't found one that is true - exclude entry.
   return false;
 }
-

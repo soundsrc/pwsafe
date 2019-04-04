@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -32,7 +32,8 @@ CManagePSWDPols::CManagePSWDPols(CWnd* pParent, const bool bLongPPs)
   : CPWDialog(CManagePSWDPols::IDD, pParent),
   m_iSelectedItem(-1), m_bChanged(false), m_iSortEntriesIndex(0),
   m_bSortEntriesAscending(true), m_iSortNamesIndex(0), m_bSortNamesAscending(true),
-  m_bViewPolicy(true), m_bLongPPs(bLongPPs), m_iundo_pos(-1)
+  m_bViewPolicy(true), m_bLongPPs(bLongPPs), m_iundo_pos(-1), m_pCopyBtn(NULL),
+  m_bCopyPasswordEnabled(false), m_bImageLoaded(FALSE), m_bDisabledImageLoaded(FALSE)
 {
   ASSERT(pParent != NULL);
 
@@ -48,7 +49,11 @@ CManagePSWDPols::CManagePSWDPols(CWnd* pParent, const bool bLongPPs)
 
 CManagePSWDPols::~CManagePSWDPols()
 {
-  m_CopyPswdBitmap.Detach();
+  if (m_bImageLoaded)
+    m_CopyPswdBitmap.Detach();
+
+  if (m_bDisabledImageLoaded)
+    m_DisabledCopyPswdBitmap.Detach();
 }
 
 void CManagePSWDPols::DoDataExchange(CDataExchange* pDX)
@@ -89,12 +94,13 @@ BOOL CManagePSWDPols::OnInitDialog()
 {
   CPWDialog::OnInitDialog();
 
+  m_pCopyBtn = (CButton *)GetDlgItem(IDC_COPYPASSWORD);
+
   if (m_bReadOnly) {
     GetDlgItem(IDC_NEW)->EnableWindow(FALSE);
     GetDlgItem(IDC_DELETE)->EnableWindow(FALSE);
 
     // Hide cancel button & change OK button text
-    GetDlgItem(IDCANCEL)->EnableWindow(FALSE);
     GetDlgItem(IDCANCEL)->ShowWindow(SW_HIDE);
 
     // Change button text
@@ -158,9 +164,9 @@ BOOL CManagePSWDPols::OnInitDialog()
   m_PolicyEntries.GetHeaderCtrl()->SetDlgCtrlID(IDC_POLICYENTRIES_HEADER);
 
   // BR1108 - Allow user to config these fonts as well
-  // Currently use same font as specified for list/tree view
-  m_PolicyNames.SetFont(Fonts::GetInstance()->GetCurrentFont());
-  m_PolicyDetails.SetFont(Fonts::GetInstance()->GetCurrentFont());
+  // Currently use same font as specified for Add/Edit
+  m_PolicyNames.SetFont(Fonts::GetInstance()->GetAddEditFont());
+  m_PolicyDetails.SetFont(Fonts::GetInstance()->GetAddEditFont());
 
   CString cs_text;
 
@@ -210,31 +216,43 @@ BOOL CManagePSWDPols::OnInitDialog()
     GetDlgItem(IDC_NEW)->EnableWindow(FALSE);
 
   // Load bitmap
-  BOOL brc;
   UINT nImageID = PWSprefs::GetInstance()->GetPref(PWSprefs::UseNewToolbar) ?
-        IDB_COPYPASSWORD_NEW : IDB_COPYPASSWORD_CLASSIC;
-  brc = m_CopyPswdBitmap.Attach(::LoadImage(
+    IDB_COPYPASSWORD_NEW : IDB_COPYPASSWORD_CLASSIC;
+
+  m_bImageLoaded = m_CopyPswdBitmap.Attach(::LoadImage(
                   ::AfxFindResourceHandle(MAKEINTRESOURCE(nImageID), RT_BITMAP),
                   MAKEINTRESOURCE(nImageID), IMAGE_BITMAP, 0, 0,
                   (LR_DEFAULTSIZE | LR_CREATEDIBSECTION | LR_SHARED)));
-  ASSERT(brc);
-  if (brc) {
+  
+  ASSERT(m_bImageLoaded);
+  if (m_bImageLoaded) {
     FixBitmapBackground(m_CopyPswdBitmap);
-    CButton *pBtn = (CButton *)GetDlgItem(IDC_COPYPASSWORD);
-    ASSERT(pBtn != NULL);
-    if (pBtn != NULL)
-      pBtn->SetBitmap(m_CopyPswdBitmap);
   }
+
+  nImageID = PWSprefs::GetInstance()->GetPref(PWSprefs::UseNewToolbar) ?
+    IDB_COPYPASSWORD_NEW_D : IDB_COPYPASSWORD_CLASSIC_D;
+
+  m_bDisabledImageLoaded = m_DisabledCopyPswdBitmap.Attach(
+    ::LoadImage(::AfxFindResourceHandle(MAKEINTRESOURCE(nImageID), RT_BITMAP),
+      MAKEINTRESOURCE(nImageID), IMAGE_BITMAP, 0, 0,
+      (LR_DEFAULTSIZE | LR_CREATEDIBSECTION | LR_SHARED)));
+
+  ASSERT(m_bDisabledImageLoaded);
+  if (m_bDisabledImageLoaded) {
+    FixBitmapBackground(m_DisabledCopyPswdBitmap);
+    m_pCopyBtn->SetBitmap(m_DisabledCopyPswdBitmap);
+  }
+
   // No changes yet
   GetDlgItem(IDC_UNDO)->EnableWindow(FALSE);
   GetDlgItem(IDC_REDO)->EnableWindow(FALSE);
 
   // Set focus on the policy names CListCtrl and so return FALSE
-  m_PolicyNames.SetFocus();
+  GotoDlgCtrl(GetDlgItem(IDC_POLICYLIST));
   return FALSE;
 }
 
-BOOL CManagePSWDPols::PreTranslateMessage(MSG* pMsg)
+BOOL CManagePSWDPols::PreTranslateMessage(MSG *pMsg)
 {
   // Do tooltips
   if (pMsg->message == WM_MOUSEMOVE) {
@@ -252,6 +270,17 @@ BOOL CManagePSWDPols::PreTranslateMessage(MSG* pMsg)
       m_pToolTipCtrl->Activate(TRUE);
       m_pToolTipCtrl->RelayEvent(&msg);
     }
+  }
+
+  // Don't even look like it was pressed if it should be disabled
+  if (pMsg->message == WM_LBUTTONDOWN && pMsg->hwnd == m_pCopyBtn->GetSafeHwnd() &&
+    !m_bCopyPasswordEnabled) {
+    return TRUE;
+  }
+
+  // Don't even process double click - looks bad
+  if (pMsg->message == WM_LBUTTONDBLCLK && pMsg->hwnd == m_pCopyBtn->GetSafeHwnd()) {
+    return TRUE;
   }
 
   if (pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_F1) {
@@ -276,6 +305,7 @@ BOOL CManagePSWDPols::PreTranslateMessage(MSG* pMsg)
       // Tell Windows we have processed it
       return TRUE;
     }
+
     if (m_bRedoShortcut && pMsg->wParam == m_siRedoVirtKey) {
       if (((m_cRedoModifier & HOTKEYF_CONTROL) == HOTKEYF_CONTROL &&
           (GetKeyState(VK_CONTROL) & 0x8000) == 0) || 
@@ -357,7 +387,7 @@ void CManagePSWDPols::OnNew()
     // Save changes for Undo/Redo
     st_PSWDPolicyChange st_change;
     st_change.name = cs_policyname;
-    st_change.flags = CPP_ADD;
+    st_change.mode = st_PSWDPolicyChange::Mode::ADD;
     st_change.st_pp_save.Empty();
 
     // Added a named password policy
@@ -433,7 +463,7 @@ void CManagePSWDPols::OnEdit()
     // Save changes for Undo/Redo
     st_PSWDPolicyChange st_change;
     st_change.name = m_iSelectedItem != 0 ? cs_policyname : L"";
-    st_change.flags = CPP_MODIFIED;
+    st_change.mode = st_PSWDPolicyChange::Mode::MODIFIED;
     st_change.st_pp_save = m_iSelectedItem != 0 ?iter->second : m_st_default_pp;
 
     // Update default (if changed) or the named policies
@@ -495,7 +525,6 @@ void CManagePSWDPols::OnList()
   else
     UpdateEntryList();
 
-
   CString cs_label(MAKEINTRESOURCE(m_bViewPolicy ? IDS_LIST : IDC_DETAILS));
   GetDlgItem(IDC_LIST_POLICYENTRIES)->SetWindowText(cs_label);
 }
@@ -518,7 +547,7 @@ void CManagePSWDPols::OnDelete()
   // Save changes for Undo/Redo
   st_PSWDPolicyChange st_change;
   st_change.name = cs_policyname;
-  st_change.flags = CPP_DELETE;
+  st_change.mode = st_PSWDPolicyChange::Mode::REMOVE;
   st_change.st_pp_save.Empty();
   st_change.st_pp_new = iter->second;
 
@@ -574,10 +603,18 @@ void CManagePSWDPols::OnGeneratePassword()
   m_password = passwd.c_str();
   m_ex_password.SetWindowText(m_password);
   m_ex_password.Invalidate();
+
+  m_bCopyPasswordEnabled = m_password.GetLength() > 0;
+
+  // Enable/Disable Copy to Clipboard
+  m_pCopyBtn->SetBitmap(m_bCopyPasswordEnabled ? m_CopyPswdBitmap : m_DisabledCopyPswdBitmap);
 }
 
 void CManagePSWDPols::OnCopyPassword()
 {
+  if (!m_bCopyPasswordEnabled)
+    return;
+
   UpdateData(TRUE);
 
   GetMainDlg()->SetClipboardData(m_password);
@@ -691,8 +728,7 @@ void CManagePSWDPols::OnPolicyRightClick(NMHDR * /*pNotifyStruct*/, LRESULT *pLR
     minfo.cbSize = sizeof(MENUINFO);
     minfo.fMask = MIM_MENUDATA;
     minfo.dwMenuData = ipopup;
-    BOOL brc = menu.SetMenuInfo(&minfo);
-    ASSERT(brc != 0);
+    VERIFY(menu.SetMenuInfo(&minfo));
 
     CMenu *pPopup = menu.GetSubMenu(0);
     ASSERT(pPopup != NULL);
@@ -866,7 +902,7 @@ void CManagePSWDPols::UpdateNames()
   m_PolicyNames.SetColumnWidth(1, LVSCW_AUTOSIZE_USEHEADER);
 }
 
-static void WindowsRowPutter(int row, const stringT &name, const stringT &value,
+static void WindowsRowPutter(int row, const std::wstring &name, const std::wstring &value,
                              void *table)
 {
   // Callback function used by st_PSWDPolicy::Policy2Table
@@ -974,8 +1010,8 @@ void CManagePSWDPols::OnUndo()
 
   bool bDefaultPolicy = st_last_change.name.empty();
 
-  switch (st_last_change.flags) {
-    case CPP_ADD:
+  switch (st_last_change.mode) {
+    case st_PSWDPolicyChange::Mode::ADD:
     {
       // We added a new policy - delete it
       PSWDPolicyMapIter iter = m_MapPSWDPLC.find(st_last_change.name);
@@ -986,14 +1022,14 @@ void CManagePSWDPols::OnUndo()
       m_iSelectedItem = 0;
       break;
     }
-    case CPP_DELETE:
+    case st_PSWDPolicyChange::Mode::REMOVE:
       // We deleted a policy - add it
       m_MapPSWDPLC[st_last_change.name] = st_last_change.st_pp_save;
 
       // Select it - but we do not yet know the m_PolicyNames index yet
       m_iSelectedItem = -1;
       break;
-    case CPP_MODIFIED:
+    case st_PSWDPolicyChange::Mode::MODIFIED:
       if (bDefaultPolicy) {
         m_st_default_pp = st_last_change.st_pp_save;
         m_iSelectedItem = 0;
@@ -1040,15 +1076,15 @@ void CManagePSWDPols::OnRedo()
 
   bool bDefaultPolicy = st_next_change.name.empty();
 
-  switch (st_next_change.flags) {
-    case CPP_ADD:
+  switch (st_next_change.mode) {
+    case st_PSWDPolicyChange::Mode::ADD:
       // We need to add a new policy
       m_MapPSWDPLC[st_next_change.name] = st_next_change.st_pp_new;
 
       // Select it - but we do not yet know the m_PolicyNames index yet
       m_iSelectedItem = -1;
       break;
-    case CPP_DELETE:
+    case st_PSWDPolicyChange::Mode::REMOVE:
       {
       // We need to delete a policy
       PSWDPolicyMapIter iter = m_MapPSWDPLC.find(st_next_change.name);
@@ -1059,7 +1095,7 @@ void CManagePSWDPols::OnRedo()
       m_iSelectedItem = 0;
       break;
       }
-    case CPP_MODIFIED:
+    case st_PSWDPolicyChange::Mode::MODIFIED:
       if (bDefaultPolicy) {
         m_st_default_pp = st_next_change.st_pp_new;
         m_iSelectedItem = 0;

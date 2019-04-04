@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -42,13 +42,11 @@ using namespace std;
 ////@begin XPM images
 ////@end XPM images
 
-
 /*!
  * YubiCfgDlg type definition
  */
 
 IMPLEMENT_CLASS( YubiCfgDlg, wxDialog )
-
 
 /*!
  * YubiCfgDlg event table definition
@@ -67,7 +65,6 @@ BEGIN_EVENT_TABLE( YubiCfgDlg, wxDialog )
 EVT_TIMER(POLLING_TIMER_ID, YubiCfgDlg::OnPollingTimer)
 END_EVENT_TABLE()
 
-
 /*!
  * YubiCfgDlg constructors
  */
@@ -78,7 +75,6 @@ YubiCfgDlg::YubiCfgDlg( wxWindow* parent, PWScore &core, wxWindowID id, const wx
   Init();
   Create(parent, id, caption, pos, size, style);
 }
-
 
 /*!
  * YubiCfgDlg creator
@@ -101,7 +97,6 @@ bool YubiCfgDlg::Create( wxWindow* parent, wxWindowID id, const wxString& captio
   return true;
 }
 
-
 /*!
  * YubiCfgDlg destructor
  */
@@ -113,7 +108,6 @@ YubiCfgDlg::~YubiCfgDlg()
   delete m_pollingTimer;
 }
 
-
 /*!
  * Member initialisation
  */
@@ -121,9 +115,9 @@ YubiCfgDlg::~YubiCfgDlg()
 void YubiCfgDlg::Init()
 {
 ////@begin YubiCfgDlg member initialisation
-  m_SKSizer = NULL;
-  m_SKCtrl = NULL;
-  m_ykstatus = NULL;
+  m_SKSizer = nullptr;
+  m_SKCtrl = nullptr;
+  m_ykstatus = nullptr;
 ////@end YubiCfgDlg member initialisation
   m_pollingTimer = new wxTimer(this, POLLING_TIMER_ID);
   m_present = !IsYubiInserted(); // lie to trigger correct actions in timer even
@@ -154,7 +148,6 @@ static void HexStr2BinSK(const StringX &str, unsigned char *sk, int len)
     sk[i++] = (unsigned char)b;
   }
 }
-
 
 /*!
  * Control creation for YubiCfgDlg
@@ -218,7 +211,6 @@ void YubiCfgDlg::CreateControls()
   m_pollingTimer->Start(CYubiMixin::POLLING_INTERVAL);
 }
 
-
 /*!
  * Should we show tooltips?
  */
@@ -270,7 +262,6 @@ void YubiCfgDlg::OnPollingTimer(wxTimerEvent &evt)
   }
 }
 
-
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_YK_HIDESHOW
  */
@@ -284,7 +275,6 @@ void YubiCfgDlg::OnYkHideshowClick( wxCommandEvent& WXUNUSED(event) )
   }
 }
 
-
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_YK_GENERATE
  */
@@ -297,7 +287,6 @@ void YubiCfgDlg::OnYkGenerateClick( wxCommandEvent& WXUNUSED(event) )
   trashMemory(yubi_sk_bin, YUBI_SK_LEN);
   Validate(); TransferDataToWindow();
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_YK_SET
@@ -362,7 +351,7 @@ void YubiCfgDlg::yubiInserted(void)
   FindWindow(ID_YKSK)->Enable(true);
   FindWindow(ID_YK_GENERATE)->Enable(true);
   FindWindow(ID_YK_SET)->Enable(true);
-  if (m_core.GetYubiSK() != NULL) {
+  if (m_core.GetYubiSK() != nullptr) {
     HideSK();
     m_yksk = BinSK2HexStr(m_core.GetYubiSK(), YUBI_SK_LEN).c_str();
   } else
@@ -388,4 +377,3 @@ bool YubiCfgDlg::IsYubiInserted() const
   const PWYubi yubi;
   return yubi.IsYubiInserted();
 }
-

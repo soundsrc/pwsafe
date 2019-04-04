@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -24,7 +24,7 @@ public:
   static PWSclipboard *GetInstance();
   static void DeleteInstance();
   bool SetData(const StringX &data);
-  bool ClearData();
+  bool ClearCBData();
 #if defined(__X__) || defined(__WXGTK__)
   void UsePrimarySelection(bool primary, bool clearOnChange=true);
 #endif
@@ -40,4 +40,3 @@ private:
 };
 
 #endif /* _PWSCLIP_H_ */
-

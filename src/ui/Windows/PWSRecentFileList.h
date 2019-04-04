@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -28,5 +28,9 @@ public:
 
   virtual void ReadList();    // reads from registry or config file
   virtual void WriteList();   // writes to registry or config file
-  bool IsMRUEmpty() {return GetSize() == 0;}
+  bool IsMRUEmpty() const {return GetNumUsed() == 0;}
+
+  // Despite what the documentation implies, GetSize returns maximum size not number used
+  int GetMaxSize() const { return GetSize(); }
+  int GetNumUsed() const;
 };

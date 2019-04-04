@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2013-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2013-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -27,8 +27,8 @@ void KeyWrap::Wrap(const unsigned char *in, unsigned char *out,
 {
 	unsigned char *A, B[16], *R;
 	unsigned int i, j, t;
-  ASSERT(m_fish != NULL);
-  ASSERT(in != NULL); ASSERT(out != NULL);
+  ASSERT(m_fish != nullptr);
+  ASSERT(in != nullptr); ASSERT(out != nullptr);
 	ASSERT(!((inlen & 0x7) || (inlen < 8)));
 	A = B;
 	t = 1;
@@ -59,8 +59,8 @@ bool KeyWrap::Unwrap(const unsigned char *in, unsigned char *out,
 {
 	unsigned char *A, B[16], *R;
 	unsigned int i, j, t;
-  ASSERT(m_fish != NULL);
-  ASSERT(in != NULL); ASSERT(out != NULL);
+  ASSERT(m_fish != nullptr);
+  ASSERT(in != nullptr); ASSERT(out != nullptr);
 	inlen -= 8;
 	if (inlen & 0x7)
 		return false;

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -12,14 +12,13 @@
 
 using namespace std;
 
-
 #define NUM_LOG_ENTRIES 256
 
-PWSLog *PWSLog::self = NULL;
+PWSLog *PWSLog::self = nullptr;
 
 PWSLog *PWSLog::GetLog()
 {
-  if (self == NULL) {
+  if (self == nullptr) {
     self = new PWSLog();
     // The following sets the queue size once, avoiding
     // memory management @ each call to Add(). (reference TBD)
@@ -31,7 +30,7 @@ PWSLog *PWSLog::GetLog()
 void PWSLog::DeleteLog()
 {
   delete self;
-  self = NULL;
+  self = nullptr;
 }
 
 void PWSLog::Add(const stringT &sLogRecord)

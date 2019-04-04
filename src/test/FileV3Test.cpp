@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -96,7 +96,7 @@ TEST_F(FileV3Test, EmptyFile)
   ASSERT_TRUE(pws_os::FileExists(fname));
 
   PWSfileV3 fr(fname.c_str(), PWSfile::Read, PWSfile::V30);
-  // Try opening with wrong passphrasse, check failure
+  // Try opening with wrong passphrase, check failure
   EXPECT_EQ(PWSfile::WRONG_PASSWORD, fr.Open(_T("x")));
 
   // Now open with correct one, check emptiness
@@ -111,11 +111,12 @@ TEST_F(FileV3Test, HeaderTest)
   PWSfileHeader hdr1, hdr2;
   hdr1.m_prefString = _T("aPrefString");
   hdr1.m_whenlastsaved = 1413129351; // overwritten in Open()
+  hdr1.m_whenpwdlastchanged = 1529684734;
   hdr1.m_lastsavedby = _T("aUser");
   hdr1.m_lastsavedon = _T("aMachine");
   hdr1.m_whatlastsaved = _T("PasswordSafe test framework");
-  hdr1.m_dbname = fname.c_str();
-  hdr1.m_dbdesc = _T("Test the header's persistency");
+  hdr1.m_DB_Name = fname.c_str();
+  hdr1.m_DB_Description = _T("Test the header's persistency");
 
   PWSfileV3 fw(fname.c_str(), PWSfile::Write, PWSfile::V30);
   fw.SetHeader(hdr1);

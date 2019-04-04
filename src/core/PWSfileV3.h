@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -24,8 +24,8 @@ public:
 
   static int CheckPasskey(const StringX &filename,
                           const StringX &passkey,
-                          FILE *a_fd = NULL,
-                          unsigned char *aPtag = NULL, uint32 *nIter = NULL);
+                          FILE *a_fd = nullptr,
+                          unsigned char *aPtag = nullptr, uint32 *nIter = nullptr);
   static bool IsV3x(const StringX &filename, VERSION &v);
 
   PWSfileV3(const StringX &filename, RWmode mode, VERSION version);

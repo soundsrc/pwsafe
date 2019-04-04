@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -28,9 +28,6 @@
 #endif
 
 #include "./graphics/tray.xpm"
-#include "./graphics/tray_blue.xpm"
-#include "./graphics/tray_white.xpm"
-#include "./graphics/tray_yellow.xpm"
 #include "./graphics/locked_tray.xpm"
 #include "./graphics/unlocked_tray.xpm"
 #include "./graphics/about.xpm"
@@ -75,14 +72,11 @@ BEGIN_EVENT_TABLE( SystemTray, wxTaskBarIcon )
   EVT_TASKBAR_LEFT_DCLICK( SystemTray::OnTaskBarLeftDoubleClick )
 END_EVENT_TABLE()
 
-SystemTray::SystemTray(PasswordSafeFrame* frame) : iconClosedBlack(tray_xpm),
-                                                   iconClosedBlue(tray_blue_xpm),
-                                                   iconClosedYellow(tray_yellow_xpm),
-                                                   iconClosedWhite(tray_white_xpm),
+SystemTray::SystemTray(PasswordSafeFrame* frame) : iconClosed(tray_xpm),
                                                    iconUnlocked(unlocked_tray_xpm),
                                                    iconLocked(locked_tray_xpm),
                                                    m_frame(frame),
-                                                   m_status(TRAY_CLOSED)
+                                                   m_status(TrayStatus::  CLOSED)
 {
 }
 
@@ -90,41 +84,20 @@ void SystemTray::SetTrayStatus(TrayStatus status)
 {
   m_status = status;
 
-#if wxCHECK_VERSION(2,9,0)
-  if (!wxTaskBarIcon::IsAvailable())
+  if (!IsTaskBarIconAvailable())
     return;
-#endif
 
   if (PWSprefs::GetInstance()->GetPref(PWSprefs::UseSystemTray)) {
      switch(status) {
-       case TRAY_CLOSED:
-         int closedIconColour;
-         closedIconColour = PWSprefs::GetInstance()->GetPref(PWSprefs::ClosedTrayIconColour);
-         switch (closedIconColour) { 
-           case PWSprefs::stiWhite:
-             SetIcon(iconClosedWhite, wxTheApp->GetAppName());
-             break;
-
-           case PWSprefs::stiYellow:
-             SetIcon(iconClosedYellow, wxTheApp->GetAppName());
-             break;
-
-           case PWSprefs::stiBlue:
-             SetIcon(iconClosedBlue, wxTheApp->GetAppName());
-             break;
-
-           case PWSprefs::stiBlack:
-           default:
-             SetIcon(iconClosedBlack, wxTheApp->GetAppName());
-             break;
-         }
+       case TrayStatus::CLOSED:
+         SetIcon(iconClosed, wxTheApp->GetAppName());
          break;
 
-       case TRAY_UNLOCKED:
+       case TrayStatus::UNLOCKED:
          SetIcon(iconUnlocked, m_frame->GetCurrentSafe());
          break;
 
-       case TRAY_LOCKED:
+       case TrayStatus::LOCKED:
          SetIcon(iconLocked, m_frame->GetCurrentSafe());
          break;
 
@@ -140,15 +113,15 @@ wxMenu* SystemTray::CreatePopupMenu()
   wxMenu* menu = new wxMenu;
 
   switch (m_status) {
-    case TRAY_UNLOCKED:
+    case TrayStatus::UNLOCKED:
         menu->Append(ID_SYSTRAY_LOCK, _("&Lock Safe"))->SetBitmap(wxBitmap(lock_xpm));
       break;
 
-    case TRAY_LOCKED:
+    case TrayStatus::LOCKED:
         menu->Append(ID_SYSTRAY_UNLOCK, _("&Unlock Safe"))->SetBitmap(wxBitmap(unlock_xpm));
         break;
 
-    case TRAY_CLOSED:
+    case TrayStatus::CLOSED:
         menu->Append(wxID_NONE, _("No Safe Open"));
         break;
 
@@ -157,7 +130,7 @@ wxMenu* SystemTray::CreatePopupMenu()
 
   }
 
-  if (m_status != TRAY_CLOSED) {
+  if (m_status != TrayStatus::CLOSED) {
     menu->AppendSeparator();
     menu->Append(wxID_CLOSE, _("&Close"))->SetBitmap(wxBitmap(close_xpm));
     menu->AppendSubMenu(GetRecentHistory(), _("&Recent Entries History"));
@@ -185,8 +158,8 @@ wxMenu* SystemTray::GetRecentHistory()
   wxMenu* menu = new wxMenu;
 
   menu->Append(ID_SYSTRAY_CLEAR_RUE, _("&Clear Recent History"));
-  menu->Append(ID_TRAYRECENT_ENTRY_HELP1, _("Note: Entry format is »Group»Title»Username»"));
-  menu->Append(ID_TRAYRECENT_ENTRY_HELP2, _("Note: Empty fields are shown as »*»"));
+  menu->Append(ID_TRAYRECENT_ENTRY_HELP1, _("Note: Entry format is «Group» «Title» «Username»"));
+  menu->Append(ID_TRAYRECENT_ENTRY_HELP2, _("Note: Empty fields are shown as « »"));
   menu->AppendSeparator();
 
   menu->Enable(ID_TRAYRECENT_ENTRY_HELP1, false);

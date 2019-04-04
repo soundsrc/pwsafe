@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -26,17 +26,22 @@ DboxMain *CPWDialog::GetMainDlg() const
   return app.GetMainDlg();
 }
 
-void CPWDialog::InitToolTip(int Flags, int delayTimeFactor)
+bool CPWDialog::InitToolTip(int Flags, int delayTimeFactor)
 {
   m_pToolTipCtrl = new CToolTipCtrl;
   if (!m_pToolTipCtrl->Create(this, Flags)) {
     pws_os::Trace(L"Unable To create ToolTip\n");
     delete m_pToolTipCtrl;
     m_pToolTipCtrl = NULL;
+    return false;
   } else {
     EnableToolTips();
-    // Delay initial show & reshow
-    if (delayTimeFactor > 0) {
+    if (delayTimeFactor == 0) {
+      // Special case for Question Mark 'button'
+      m_pToolTipCtrl->SetDelayTime(TTDT_INITIAL, 0);
+      m_pToolTipCtrl->SetDelayTime(TTDT_RESHOW, 0);
+      m_pToolTipCtrl->SetDelayTime(TTDT_AUTOPOP, 30000);
+    } else {
       int iTime = m_pToolTipCtrl->GetDelayTime(TTDT_AUTOPOP);
       m_pToolTipCtrl->SetDelayTime(TTDT_INITIAL, iTime);
       m_pToolTipCtrl->SetDelayTime(TTDT_RESHOW, iTime);
@@ -44,6 +49,7 @@ void CPWDialog::InitToolTip(int Flags, int delayTimeFactor)
     }
     m_pToolTipCtrl->SetMaxTipWidth(300);
   }
+  return true;
 }
 
 void CPWDialog::AddTool(int DlgItemID, int ResID)
@@ -104,6 +110,12 @@ INT_PTR CPWDialog::DoModal()
   return rc;
 }
 
+static const char szDialog[] = "Dialog";
+static const char szPropertySheet[] = "PropertySheet";
+
+static const size_t len_Dialog = strlen(szDialog);
+static const size_t len_PropertySheet = strlen(szPropertySheet);
+
 CPWDialogTracker *CPWDialog::GetDialogTracker()
 {
   return sm_tracker;
@@ -149,4 +161,90 @@ void CPWDialogTracker::Apply(void (*f)(CWnd *))
   dialogs = m_dialogs;
   m_mutex.Unlock();
   std::for_each(dialogs.begin(), dialogs.end(), std::ptr_fun(f));
+}
+
+bool CPWDialogTracker::VerifyCanCloseDialogs()
+{
+  // we operate on a copy of the list of dialogs,
+  // to avoid deadlocks and other nastiness
+  std::list<CWnd *> dialogs;
+  m_mutex.Lock();
+  dialogs = m_dialogs;
+  m_mutex.Unlock();
+
+  for (auto *pWnd : dialogs) {
+    CRuntimeClass *prt = pWnd->GetRuntimeClass();
+    size_t len_classname = strlen(prt->m_lpszClassName);
+    bool bCanDo(false);
+
+    if (len_classname > len_Dialog) {
+      const char *last_chars = &prt->m_lpszClassName[len_classname - len_Dialog];
+      if (strcmp(last_chars, szDialog) == 0) {
+        bCanDo = true;
+      }
+    }
+
+    if (len_classname > len_PropertySheet) {
+      const char *last_chars = &prt->m_lpszClassName[len_classname - len_PropertySheet];
+      if (strcmp(last_chars, szPropertySheet) == 0) {
+        bCanDo = true;
+      }
+    }
+
+    if (!bCanDo)
+      return bCanDo;
+  }
+  //std::for_each(dialogs.begin(), dialogs.end(), std::ptr_fun(f));
+
+  return true;
+}
+
+namespace {
+  void Shower(CWnd *pWnd)
+  {
+    pWnd->ShowWindow(SW_SHOW);
+  }
+
+  void Hider(CWnd *pWnd)
+  {
+    pWnd->ShowWindow(SW_HIDE);
+  }
+
+  void Closer(CWnd *pWnd)
+  {
+    CRuntimeClass *prt = pWnd->GetRuntimeClass();
+    size_t len_classname = strlen(prt->m_lpszClassName);
+
+    if (len_classname > len_Dialog) {
+      const char *last_chars = &prt->m_lpszClassName[len_classname - len_Dialog];
+      if (strcmp(last_chars, szDialog) == 0) {
+        ((CDialog *)pWnd)->EndDialog(IDCANCEL);
+      }
+    }
+
+    if (len_classname > len_PropertySheet) {
+      const char *last_chars = &prt->m_lpszClassName[len_classname - len_PropertySheet];
+      if (strcmp(last_chars, szPropertySheet) == 0) {
+        ((CPropertySheet *)pWnd)->EndDialog(IDCANCEL);
+      }
+    }
+  }
+}
+
+void CPWDialogTracker::ShowOpenDialogs()
+{
+  Apply(Shower);
+}
+
+void CPWDialogTracker::HideOpenDialogs()
+{
+  Apply(Hider);
+}
+
+void CPWDialogTracker::CloseOpenDialogs()
+{
+  // Only close them if DB is R-O
+  if (app.GetMainDlg()->IsDBReadOnly()) {
+    Apply(Closer);
+  }
 }

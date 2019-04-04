@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -30,22 +30,22 @@ END_MESSAGE_MAP()
 
 void CPWHistListCtrl::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *pLResult)
 {
-  NMLVCUSTOMDRAW *pNMLVCUSTOMDRAW = (NMLVCUSTOMDRAW *)pNotifyStruct;
+  NMLVCUSTOMDRAW *pLVCD = reinterpret_cast<NMLVCUSTOMDRAW *>(pNotifyStruct);
 
   *pLResult = CDRF_DODEFAULT;
 
   static bool bchanged_subitem_font(false);
-  static CFont *pCurrentFont = NULL;
+  static CFont *pAddEditFont = NULL;
   static CFont *pPasswordFont = NULL;
   static CDC *pDC = NULL;
 
-  switch (pNMLVCUSTOMDRAW->nmcd.dwDrawStage) {
+  switch (pLVCD->nmcd.dwDrawStage) {
     case CDDS_PREPAINT:
       // PrePaint
       bchanged_subitem_font = false;
-      pCurrentFont = Fonts::GetInstance()->GetCurrentFont();
+      pAddEditFont = Fonts::GetInstance()->GetAddEditFont();
       pPasswordFont = Fonts::GetInstance()->GetPasswordFont();
-      pDC = CDC::FromHandle(pNMLVCUSTOMDRAW->nmcd.hdc);
+      pDC = CDC::FromHandle(pLVCD->nmcd.hdc);
       *pLResult = CDRF_NOTIFYITEMDRAW;
       break;
 
@@ -56,7 +56,7 @@ void CPWHistListCtrl::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *pLResult)
 
     case CDDS_ITEMPREPAINT | CDDS_SUBITEM:
       // Sub-item PrePaint
-      if (pNMLVCUSTOMDRAW->iSubItem == 1) {
+      if (pLVCD->iSubItem == 1) {
         bchanged_subitem_font = true;
         pDC->SelectObject(pPasswordFont);
         *pLResult |= (CDRF_NOTIFYPOSTPAINT | CDRF_NEWFONT);
@@ -67,7 +67,7 @@ void CPWHistListCtrl::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *pLResult)
       // Sub-item PostPaint - restore old font if any
       if (bchanged_subitem_font) {
         bchanged_subitem_font = false;
-        pDC->SelectObject(pCurrentFont);
+        pDC->SelectObject(pAddEditFont);
         *pLResult |= CDRF_NEWFONT;
       }
       break;

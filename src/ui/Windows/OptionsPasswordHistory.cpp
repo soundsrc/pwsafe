@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -43,6 +43,7 @@ COptionsPasswordHistory::COptionsPasswordHistory(CWnd *pParent, st_Opt_master_da
   m_SavePWHistory = M_SavePWHistory();
   m_PWHistoryNumDefault = M_PWHistoryNumDefault();
   m_PWHAction = M_PWHAction();
+  m_PWHDefExpDays = M_PWHDefExpDays();
 }
 
 void COptionsPasswordHistory::DoDataExchange(CDataExchange* pDX)
@@ -53,9 +54,15 @@ void COptionsPasswordHistory::DoDataExchange(CDataExchange* pDX)
   DDX_Check(pDX, IDC_SAVEPWHISTORY, m_SavePWHistory);
   DDX_Check(pDX, IDC_UPDATEPROTECTEDPWH, mApplyToProtected);
   DDX_Text(pDX, IDC_DEFPWHNUM, m_PWHistoryNumDefault);
+  DDX_Text(pDX, IDC_DEFEXPIRYDAYS, m_PWHDefExpDays);
   DDX_Radio(pDX, IDC_PWHISTORYNOACTION, m_PWHAction);
 
   DDX_Control(pDX, IDC_SAVEPWHISTORY, m_chkbox);
+
+  DDX_Control(pDX, IDC_RESETPWHISTORYOFFHELP, m_Help1);
+  DDX_Control(pDX, IDC_RESETPWHISTORYONHELP, m_Help2);
+  DDX_Control(pDX, IDC_SETMAXPWHISTORYHELP, m_Help3);
+  DDX_Control(pDX, IDC_CLEARPWHISTORYHELP, m_Help4);
   //}}AFX_DATA_MAP
 }
 
@@ -82,33 +89,70 @@ BOOL COptionsPasswordHistory::OnInitDialog()
   COptions_PropertyPage::OnInitDialog();
 
   m_chkbox.SetTextColour(CR_DATABASE_OPTIONS);
-  m_chkbox.ResetBkgColour();//Use current window's background
+  m_chkbox.ResetBkgColour(); // Use current window's background
+
+  // Database preferences - can't change in R/O mode of if no DB is open
+  if (!GetMainDlg()->IsDBOpen() || GetMainDlg()->IsDBReadOnly()) {
+    GetDlgItem(IDC_STATIC_NUMPWSDHIST)->EnableWindow(FALSE);
+    GetDlgItem(IDC_SAVEPWHISTORY)->EnableWindow(FALSE);
+    GetDlgItem(IDC_DEFPWHNUM)->EnableWindow(FALSE);
+    GetDlgItem(IDC_PWHSPIN)->EnableWindow(FALSE);
+
+    GetDlgItem(IDC_STATIC_MANAGEPWH)->EnableWindow(FALSE);
+    GetDlgItem(IDC_PWHISTORYNOACTION)->EnableWindow(FALSE);
+    GetDlgItem(IDC_RESETPWHISTORYOFF)->EnableWindow(FALSE);
+    GetDlgItem(IDC_RESETPWHISTORYON)->EnableWindow(FALSE);
+    GetDlgItem(IDC_SETMAXPWHISTORY)->EnableWindow(FALSE);
+    GetDlgItem(IDC_CLEARPWHISTORY)->EnableWindow(FALSE);
+    GetDlgItem(IDC_STATIC_UPDATEPWHISTORY)->EnableWindow(FALSE);
+    GetDlgItem(IDC_UPDATEPROTECTEDPWH)->EnableWindow(FALSE);
+  } else {
+    GetDlgItem(IDC_PWHSPIN)->EnableWindow(m_SavePWHistory);
+    GetDlgItem(IDC_DEFPWHNUM)->EnableWindow(m_SavePWHistory);
+    GetDlgItem(IDC_STATIC_NUMPWSDHIST)->EnableWindow(m_SavePWHistory);
+  }
 
   CSpinButtonCtrl *pspin = (CSpinButtonCtrl *)GetDlgItem(IDC_PWHSPIN);
-
   pspin->SetBuddy(GetDlgItem(IDC_DEFPWHNUM));
-  pspin->SetRange(1, 255);
+  pspin->SetRange(M_prefminPWHNumber(), M_prefmaxPWHNumber());
   pspin->SetBase(10);
   pspin->SetPos(m_PWHistoryNumDefault);
 
-  GetDlgItem(IDC_PWHSPIN)->EnableWindow(m_SavePWHistory);
-  GetDlgItem(IDC_DEFPWHNUM)->EnableWindow(m_SavePWHistory);
-  GetDlgItem(IDC_STATIC_NUMPWSDHIST)->EnableWindow(m_SavePWHistory);
+  pspin = (CSpinButtonCtrl *)GetDlgItem(IDC_DEDSPIN);
+  pspin->SetBuddy(GetDlgItem(IDC_DEFEXPIRYDAYS));
+  pspin->SetRange(PWSprefs::GetInstance()->GetPrefMinVal(PWSprefs::DefaultExpiryDays),
+                  PWSprefs::GetInstance()->GetPrefMaxVal(PWSprefs::DefaultExpiryDays));
+  pspin->SetBase(10);
+  pspin->SetPos(m_PWHDefExpDays);
 
   // Disable text re: PWHistory changes on existing entries to start
   GetDlgItem(IDC_STATIC_UPDATEPWHISTORY)->EnableWindow(FALSE);
   GetDlgItem(IDC_UPDATEPROTECTEDPWH)->EnableWindow(FALSE);
 
-  InitToolTip(TTS_BALLOON | TTS_NOPREFIX, 4);
-  // Note naming convention: string IDS_xxx corresponds to control IDC_xxx
-  AddTool(IDC_RESETPWHISTORYOFF, IDS_RESETPWHISTORYOFF);
-  AddTool(IDC_RESETPWHISTORYON,  IDS_RESETPWHISTORYON);
-  AddTool(IDC_SETMAXPWHISTORY,   IDS_SETMAXPWHISTORY);
-  AddTool(IDC_CLEARPWHISTORY,    IDS_CLEARPWHISTORY);
-  ActivateToolTip();
+  if (InitToolTip(TTS_BALLOON | TTS_NOPREFIX, 0)) {
+    m_Help1.Init(IDB_QUESTIONMARK);
+    m_Help2.Init(IDB_QUESTIONMARK);
+    m_Help3.Init(IDB_QUESTIONMARK);
+    m_Help4.Init(IDB_QUESTIONMARK);
+
+    // Note naming convention: string IDS_xxx corresponds to control IDC_xxx_HELP
+    AddTool(IDC_RESETPWHISTORYOFFHELP, IDS_RESETPWHISTORYOFF);
+    AddTool(IDC_RESETPWHISTORYONHELP, IDS_RESETPWHISTORYON);
+    AddTool(IDC_SETMAXPWHISTORYHELP, IDS_SETMAXPWHISTORY);
+    AddTool(IDC_CLEARPWHISTORYHELP, IDS_CLEARPWHISTORY);
+    ActivateToolTip();
+  } else {
+    m_Help1.EnableWindow(FALSE);
+    m_Help1.ShowWindow(SW_HIDE);
+    m_Help2.EnableWindow(FALSE);
+    m_Help2.ShowWindow(SW_HIDE);
+    m_Help3.EnableWindow(FALSE);
+    m_Help3.ShowWindow(SW_HIDE);
+    m_Help4.EnableWindow(FALSE);
+    m_Help4.ShowWindow(SW_HIDE);
+  }
 
   return TRUE;  // return TRUE unless you set the focus to a control
-  // EXCEPTION: OCX Property Pages should return FALSE
 }
 
 LRESULT COptionsPasswordHistory::OnQuerySiblings(WPARAM wParam, LPARAM )
@@ -123,7 +167,8 @@ LRESULT COptionsPasswordHistory::OnQuerySiblings(WPARAM wParam, LPARAM )
     case PP_DATA_CHANGED:
       if (M_SavePWHistory()        != m_SavePWHistory        ||
           (m_SavePWHistory         == TRUE &&
-           M_PWHistoryNumDefault() != m_PWHistoryNumDefault))
+           M_PWHistoryNumDefault() != m_PWHistoryNumDefault) ||
+          M_PWHDefExpDays()        != m_PWHDefExpDays)
         return 1L;
       break;
     case PP_UPDATE_VARIABLES:
@@ -142,11 +187,12 @@ BOOL COptionsPasswordHistory::OnApply()
   M_SavePWHistory() = m_SavePWHistory;
   M_PWHistoryNumDefault() = m_PWHistoryNumDefault;
   M_PWHAction() = m_PWHAction * (mApplyToProtected == 0 ? 1 : -1);
+  M_PWHDefExpDays() = m_PWHDefExpDays;
 
   return COptions_PropertyPage::OnApply();
 }
 
-BOOL COptionsPasswordHistory::PreTranslateMessage(MSG* pMsg)
+BOOL COptionsPasswordHistory::PreTranslateMessage(MSG *pMsg)
 {
   RelayToolTipEvent(pMsg);
 
@@ -160,16 +206,27 @@ BOOL COptionsPasswordHistory::PreTranslateMessage(MSG* pMsg)
 
 BOOL COptionsPasswordHistory::OnKillActive()
 {
-  CGeneralMsgBox gmb;
+  if (UpdateData(TRUE) == FALSE)
+    return FALSE;
+
+  // Update variable from text box
+  CString csText;
+  ((CEdit *)GetDlgItem(IDC_DEFPWHNUM))->GetWindowText(csText);
+  m_PWHistoryNumDefault = _wtoi(csText);
+
   // Check that options, as set, are valid.
-  if (m_SavePWHistory && ((m_PWHistoryNumDefault < 1) || (m_PWHistoryNumDefault > 255))) {
-    gmb.AfxMessageBox(IDS_DEFAULTNUMPWH);
-    ((CEdit*)GetDlgItem(IDC_DEFPWHNUM))->SetFocus();
+  if (m_SavePWHistory &&
+      ((m_PWHistoryNumDefault < M_prefminPWHNumber()) ||
+       (m_PWHistoryNumDefault > M_prefmaxPWHNumber()))) {
+    CGeneralMsgBox gmb;
+    csText.Format(IDS_DEFAULTNUMPWH, M_prefminPWHNumber(), M_prefmaxPWHNumber());
+    gmb.AfxMessageBox(csText);
+    ((CEdit *)GetDlgItem(IDC_DEFPWHNUM))->SetFocus();
     return FALSE;
   }
   //End check
 
-  return COptions_PropertyPage::OnKillActive();;
+  return COptions_PropertyPage::OnKillActive();
 }
 
 void COptionsPasswordHistory::OnHelp()
@@ -206,10 +263,15 @@ HBRUSH COptionsPasswordHistory::OnCtlColor(CDC *pDC, CWnd *pWnd, UINT nCtlColor)
   // Database preferences - associated static text
   switch (pWnd->GetDlgCtrlID()) {
     case IDC_STATIC_NUMPWSDHIST:
-      pDC->SetTextColor(CR_DATABASE_OPTIONS);
-      pDC->SetBkMode(TRANSPARENT);
-      break;
     case IDC_SAVEPWHISTORY:
+    case IDC_STATIC_MANAGEPWH:
+    case IDC_PWHISTORYNOACTION:
+    case IDC_RESETPWHISTORYOFF:
+    case IDC_RESETPWHISTORYON:
+    case IDC_SETMAXPWHISTORY:
+    case IDC_CLEARPWHISTORY:
+    case IDC_STATIC_UPDATEPWHISTORY:
+    case IDC_UPDATEPROTECTEDPWH:
       pDC->SetTextColor(CR_DATABASE_OPTIONS);
       pDC->SetBkMode(TRANSPARENT);
       break;

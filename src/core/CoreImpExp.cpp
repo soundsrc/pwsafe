@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -66,7 +66,7 @@ struct ExportTester {
   {}
 
   // operator for ItemList
-  bool operator()(pair<CUUID, CItemData> p)
+  bool operator()(const pair<CUUID , CItemData > &p)
   {return operator()(p.second);}
 
   // operator for OrderedItemList
@@ -76,7 +76,7 @@ struct ExportTester {
   }
 
 private:
-  ExportTester& operator=(const ExportTester&); // Do not implement
+  ExportTester& operator=(const ExportTester&) = delete;
   const stringT &m_subgroup_name;
   const int &m_subgroup_object;
   const int &m_subgroup_function;
@@ -91,7 +91,7 @@ int PWScore::TestSelection(const bool bAdvanced,
   // Check if any pass restricting criteria
   if (bAdvanced) {
     bool bAnyMatch(false);
-    if (pOIL != NULL) {
+    if (pOIL != nullptr) {
       if (find_if(pOIL->begin(), pOIL->end(),
                   ExportTester(subgroup_name,
                                subgroup_object,
@@ -108,7 +108,7 @@ int PWScore::TestSelection(const bool bAdvanced,
     if (!bAnyMatch)
       return FAILURE;
   } else {
-    if (pOIL != NULL)
+    if (pOIL != nullptr)
       return pOIL->empty() ? NO_ENTRIES_EXPORTED : SUCCESS;
     else
       return m_pwlist.empty() ? NO_ENTRIES_EXPORTED : SUCCESS;
@@ -224,7 +224,7 @@ struct TextRecordWriter {
   {}
 
   // operator for ItemList
-  void operator()(pair<CUUID, CItemData> p)
+  void operator()(const pair<CUUID, CItemData> &p)
   {operator()(p.second);}
 
   // operator for OrderedItemList
@@ -241,7 +241,7 @@ struct TextRecordWriter {
                              item.GetTitle() + StringX(_T("\xbb \xab")) +
                              item.GetUser()  + StringX(_T("\xbb"));
 
-        if (m_pRpt != NULL)
+        if (m_pRpt != nullptr)
           m_pRpt->WriteLine(sx_exported.c_str());
         m_pcore->UpdateWizard(sx_exported.c_str());
 
@@ -268,7 +268,7 @@ struct TextRecordWriter {
   }
 
 private:
-  TextRecordWriter& operator=(const TextRecordWriter&); // Do not implement
+  TextRecordWriter& operator=(const TextRecordWriter&) = delete;
   const stringT &m_subgroup_name;
   const int &m_subgroup_object;
   const int &m_subgroup_function;
@@ -297,19 +297,19 @@ int PWScore::WritePlaintextFile(const StringX &filename,
 
   // Although the MFC UI prevents the user selecting export of an
   // empty database, other UIs might not, so:
-  if ((pOIL != NULL && pOIL->empty()) ||
-      (pOIL == NULL && m_pwlist.empty()))
+  if ((pOIL != nullptr && pOIL->empty()) ||
+      (pOIL == nullptr && m_pwlist.empty()))
     return NO_ENTRIES_EXPORTED;
 
   FILE *txtfile = pws_os::FOpen(filename.c_str(), _T("wt"));
-  if (txtfile == NULL)
+  if (txtfile == nullptr)
     return CANT_OPEN_FILE;
 
   CUTF8Conv conv;
   coStringXStream ofs;
 
   StringX hdr(_T(""));
-  const unsigned char *utf8 = NULL;
+  const unsigned char *utf8 = nullptr;
   size_t utf8Len = 0;
 
   if (bsFields.count() == bsFields.size()) {
@@ -332,7 +332,7 @@ int PWScore::WritePlaintextFile(const StringX &filename,
   TextRecordWriter put_text(subgroup_name, subgroup_object, subgroup_function,
                    bsFields, delimiter, ofs, txtfile, numExported, pRpt, this);
 
-  if (pOIL != NULL) {
+  if (pOIL != nullptr) {
     for_each(pOIL->begin(), pOIL->end(), put_text);
   } else {
     for_each(m_pwlist.begin(), m_pwlist.end(), put_text);
@@ -360,7 +360,7 @@ struct XMLRecordWriter {
   }
 
   // operator for ItemList
-  void operator()(pair<CUUID, CItemData> p)
+  void operator()(const pair<CUUID, CItemData> &p)
   {operator()(p.second);}
 
   // operator for OrderedItemList
@@ -393,7 +393,7 @@ struct XMLRecordWriter {
         }
       }
 
-      if (m_pRpt != NULL)
+      if (m_pRpt != nullptr)
         m_pRpt->WriteLine(sx_exported.c_str(), false);
 
       m_pcore->UpdateWizard(sx_exported.c_str());
@@ -404,11 +404,13 @@ struct XMLRecordWriter {
                                bforce_normal_entry, bXMLErrorsFound);
 
       if (bXMLErrorsFound) {
-        m_pRpt->WriteLine(_T("\t"), false);
-        m_pRpt->WriteLine(strXMLErrors.c_str());
+        if (m_pRpt != nullptr) {
+          m_pRpt->WriteLine(_T("\t"), false);
+          m_pRpt->WriteLine(strXMLErrors.c_str());
+        }
         m_numXMLErrors++;
       } else
-        m_pRpt->WriteLine();
+        if (m_pRpt != nullptr) m_pRpt->WriteLine();
 
       m_ofs.write(xml.c_str(),
                  static_cast<streamsize>(xml.length()));
@@ -425,7 +427,7 @@ struct XMLRecordWriter {
   }
 
 private:
-  XMLRecordWriter& operator=(const XMLRecordWriter&); // Do not implement
+  XMLRecordWriter& operator=(const XMLRecordWriter&) = delete;
   const stringT &m_subgroup_name;
   const int m_subgroup_object;
   const int m_subgroup_function;
@@ -445,24 +447,25 @@ int PWScore::WriteXMLFile(const StringX &filename,
                           const CItemData::FieldBits &bsFields,
                           const stringT &subgroup_name,
                           const int &subgroup_object, const int &subgroup_function,
-                          const TCHAR &delimiter, int &numExported,
+                          const TCHAR &delimiter, const stringT &exportgroup, int &numExported,
                           const OrderedItemList *il,
-                          const bool &bFilterActive, CReport *pRpt)
+                          const bool &bFilterActive,
+                          CReport *pRpt)
 {
   numExported = 0;
 
   // Although the MFC UI prevents the user selecting export of an
   // empty database, other UIs might not, so:
-  if ((il != NULL && il->empty()) ||
-      (il == NULL && m_pwlist.empty()))
+  if ((il != nullptr && il->empty()) ||
+      (il == nullptr && m_pwlist.empty()))
     return NO_ENTRIES_EXPORTED;
 
   FILE *xmlfile = pws_os::FOpen(filename.c_str(), _T("wt"));
-  if (xmlfile == NULL)
+  if (xmlfile == nullptr)
     return CANT_OPEN_FILE;
 
   CUTF8Conv conv;
-  const unsigned char *utf8 = NULL;
+  const unsigned char *utf8 = nullptr;
   size_t utf8Len = 0;
 
   coStringXStream ofs;
@@ -526,6 +529,15 @@ int PWScore::WriteXMLFile(const StringX &filename,
     ofs << "\"" << endl;
   }
 
+  if (m_hdr.m_whenpwdlastchanged != 0) {
+    StringX wls = PWSUtil::ConvertToDateTimeString(m_hdr.m_whenpwdlastchanged,
+                                                   PWSUtil::TMC_XML);
+    conv.ToUTF8(wls.c_str(), utf8, utf8Len);
+    ofs << "WhenPwdLastChanged=\"";
+    ofs.write(reinterpret_cast<const char *>(utf8), utf8Len);
+    ofs << "\"" << endl;
+  }
+
   CUUID huuid(*m_hdr.m_file_uuid.GetARep(), true); // true to print canonically
 
   ofs << "Database_uuid=\"" << huuid << "\"" << endl;
@@ -566,15 +578,31 @@ int PWScore::WriteXMLFile(const StringX &filename,
 
   if (!m_vEmptyGroups.empty()) {
     // Write out empty groups stored in database
-    ostringstreamT os;
-    os << "\t<EmptyGroups>" << endl;
-    for (size_t n = 0; n < m_vEmptyGroups.size(); n++) {
-      stringT sTemp = PWSUtil::GetSafeXMLString(m_vEmptyGroups[n]);
-      os << "\t\t<EGName>" << sTemp << "</EGName>" << endl;
+    // However, if exporting a group, only export empty groups
+    // contained within it
+    std::vector<StringX> vsubemptygroups;
+    if (!exportgroup.empty()) {
+      for (size_t n = 0; n < m_vEmptyGroups.size(); n++) {
+        if (m_vEmptyGroups[n].substr(0, exportgroup.length()) == StringX(exportgroup.c_str()))
+          vsubemptygroups.push_back(m_vEmptyGroups[n]);
+      }
+    } else {
+      vsubemptygroups = m_vEmptyGroups;
     }
-    os << "\t</EmptyGroups>" << endl << endl;
-    conv.ToUTF8(os.str().c_str(), utf8, utf8Len);
-    ofs.write(reinterpret_cast<const char *>(utf8), utf8Len);
+
+    ostringstreamT os;
+
+    // Don't write out XML empty groups if there aren't any!
+    if (!vsubemptygroups.empty()) {
+      os << "\t<EmptyGroups>" << endl;
+      for (size_t n = 0; n < vsubemptygroups.size(); n++) {
+        stringT sTemp = PWSUtil::GetSafeXMLString(vsubemptygroups[n]);
+        os << "\t\t<EGName>" << sTemp << "</EGName>" << endl;
+      }
+      os << "\t</EmptyGroups>" << endl << endl;
+      conv.ToUTF8(os.str().c_str(), utf8, utf8Len);
+      ofs.write(reinterpret_cast<const char *>(utf8), utf8Len);
+    }
   }
 
   bool bStartComment(false);
@@ -680,7 +708,7 @@ int PWScore::WriteXMLFile(const StringX &filename,
                           bsFields, delimiter, ofs, xmlfile, numExported, 
                           numXMLErrors, pRpt, this);
 
-  if (il != NULL) {
+  if (il != nullptr) {
     for_each(il->begin(), il->end(), put_xml);
   } else {
     for_each(m_pwlist.begin(), m_pwlist.end(), put_xml);
@@ -707,7 +735,7 @@ int PWScore::ImportXMLFile(const stringT & /*ImportedPrefix*/,
                            int & /*numValidated*/, int & /*numImported*/, int & /*numSkipped*/,
                            int & /*numPWHErrors*/, int & /*numRenamed*/,
                            int & /*numNoPolicy*/,  int & /*numRenamedPolicies*/,
-                           int & /*numShortcutsRemoved*/,
+                           int & /*numShortcutsRemoved*/, int & /* numEmptyGroupsImported */,
                            CReport & /*rpt*/, Command *& /*pcommand*/)
 {
   return UNIMPLEMENTED;
@@ -720,7 +748,7 @@ int PWScore::ImportXMLFile(const stringT &ImportedPrefix, const stringT &strXMLF
                            int &numValidated, int &numImported, int &numSkipped,
                            int &numPWHErrors, int &numRenamed,
                            int &numNoPolicy, int &numRenamedPolicies,
-                           int &numShortcutsRemoved,
+                           int &numShortcutsRemoved, int &numEmptyGroupsImported,
                            CReport &rpt, Command *&pcommand)
 {
   UUIDVector Possible_Aliases, Possible_Shortcuts;
@@ -744,6 +772,7 @@ int PWScore::ImportXMLFile(const stringT &ImportedPrefix, const stringT &strXMLF
   if (!status) {
     return XML_FAILED_VALIDATION;
   }
+
   numValidated = iXML.getNumEntriesValidated();
 
   validation = false;
@@ -757,6 +786,7 @@ int PWScore::ImportXMLFile(const stringT &ImportedPrefix, const stringT &strXMLF
   numNoPolicy = iXML.getNumNoPolicies();
   numRenamedPolicies = iXML.getNumRenamedPolicies();
   numShortcutsRemoved = iXML.getNumShortcutsRemoved();
+  numEmptyGroupsImported = iXML.getNumEmptyGroupsImported();
 
   strXMLErrors = iXML.getXMLErrors();
   strSkippedList = iXML.getSkippedList();
@@ -765,12 +795,9 @@ int PWScore::ImportXMLFile(const stringT &ImportedPrefix, const stringT &strXMLF
 
   if (!status) {
     delete pcommand;
-    pcommand = NULL;
+    pcommand = nullptr;
     return XML_FAILED_IMPORT;
   }
-
-  if (numImported > 0)
-    SetDBChanged(true);
 
   return ((numRenamed + numPWHErrors) == 0) ? SUCCESS : OK_WITH_ERRORS;
 }
@@ -798,13 +825,13 @@ int PWScore::ImportPlaintextFile(const StringX &ImportedPrefix,
 {
   stringT cs_error;
   CUTF8Conv conv;
-  pcommand = NULL;
+  pcommand = nullptr;
 
   // We need to use FOpen as the file name/file path may contain non-Latin
   // characters even though we need the file to contain ASCII and UTF-8 characters
   // and not Unicode (wchar_t).
   FILE *fs = pws_os::FOpen(filename.c_str(), _T("rt"));
-  if (fs == NULL)
+  if (fs == nullptr)
     return CANT_OPEN_FILE;
 
   // We need to use file stream I/O but can't with standard FILE I/O
@@ -904,25 +931,29 @@ int PWScore::ImportPlaintextFile(const StringX &ImportedPrefix,
 #define HDR_MAP_ENTRY2(e, ie) {e, CItemData::ie},
     
         // These must be defined in the same order as Fields enum above, or it will assert below
-      
-        HDR_MAP_ENTRY(GROUPTITLE) HDR_MAP_ENTRY(USER)               HDR_MAP_ENTRY(PASSWORD)  HDR_MAP_ENTRY(URL)
-        HDR_MAP_ENTRY(AUTOTYPE)   HDR_MAP_ENTRY(CTIME)              HDR_MAP_ENTRY(PMTIME)    HDR_MAP_ENTRY(ATIME)
-        HDR_MAP_ENTRY(XTIME)      HDR_MAP_ENTRY(XTIME_INT)          HDR_MAP_ENTRY(RMTIME)    HDR_MAP_ENTRY(POLICY)
-        HDR_MAP_ENTRY(POLICYNAME) HDR_MAP_ENTRY2(HISTORY, PWHIST)   HDR_MAP_ENTRY(RUNCMD)    HDR_MAP_ENTRY(DCA)
-        HDR_MAP_ENTRY(SHIFTDCA)   HDR_MAP_ENTRY(EMAIL)              HDR_MAP_ENTRY(PROTECTED) HDR_MAP_ENTRY(SYMBOLS)
+        HDR_MAP_ENTRY(GROUPTITLE) HDR_MAP_ENTRY(USER)
+        HDR_MAP_ENTRY(PASSWORD)   HDR_MAP_ENTRY(URL)
+        HDR_MAP_ENTRY(AUTOTYPE)   HDR_MAP_ENTRY(CTIME)
+        HDR_MAP_ENTRY(PMTIME)     HDR_MAP_ENTRY(ATIME)
+        HDR_MAP_ENTRY(XTIME)      HDR_MAP_ENTRY(XTIME_INT)
+        HDR_MAP_ENTRY(RMTIME)     HDR_MAP_ENTRY(POLICY)
+        HDR_MAP_ENTRY(POLICYNAME) HDR_MAP_ENTRY2(HISTORY, PWHIST)
+        HDR_MAP_ENTRY(RUNCMD)     HDR_MAP_ENTRY(DCA)
+        HDR_MAP_ENTRY(SHIFTDCA)   HDR_MAP_ENTRY(EMAIL)
+        HDR_MAP_ENTRY(PROTECTED)  HDR_MAP_ENTRY(SYMBOLS)
         HDR_MAP_ENTRY(KBSHORTCUT) HDR_MAP_ENTRY(NOTES)
 
 #undef HDR_MAP_ENTRY
 #undef HDR_MAP_ENTRY2
     };
     
-    // make sure all elements are there
+  // make sure all elements are there
   static_assert((NumberOf(fieldMap) == NUMFIELDS), "Mismatch between fieldMap size and NUMFIELDS");
 
   to = 0;
   do {
     // make sure EXPORTHEADER has correct field names, though we have some resiliency below
-    ASSERT( vs_Header[itoken] == CItemData::FieldName(fieldMap[itoken].itemField));  
+    ASSERT( vs_Header[itoken] == CItemData::EngFieldName(fieldMap[itoken].itemField));
     from = s_header.find_first_not_of(pSeps, to);
     if (from == string::npos)
       break;
@@ -935,7 +966,7 @@ int PWScore::ImportPlaintextFile(const StringX &ImportedPrefix,
       i_Offset[it - vs_Header.begin()] = itoken;
       num_found++;
     }
-    else if ( token == CItemData::FieldName(fieldMap[itoken].itemField) ) {
+    else if ( token == CItemData::EngFieldName(fieldMap[itoken].itemField) ) {
       // Column header might not match if it was exported from a version where EXPORTHEADER didn't
       // name the column titles correctly.  So compare directly with the corresponding field name.
       // Note that we are not searching here, unlike the above if block. The incorrect title has to
@@ -1352,9 +1383,6 @@ int PWScore::ImportPlaintextFile(const StringX &ImportedPrefix,
       ci_temp.SetStatus(CItemData::ES_ADDED);
     }
 
-    // Get GUI to populate its field
-    GUISetupDisplayInfo(ci_temp);
-
     // Need to check that entry keyboard shortcut not already in use!
     int32 iKBShortcut;
     ci_temp.GetKBShortcut(iKBShortcut);
@@ -1379,6 +1407,7 @@ int PWScore::ImportPlaintextFile(const StringX &ImportedPrefix,
         rpt.WriteLine(sxTemp.c_str());
         numshortcutsremoved++;
       }
+
       if (m_iAppHotKey == iKBShortcut) {
         // Remove it
         ci_temp.SetKBShortcut(0);
@@ -1438,9 +1467,6 @@ int PWScore::ImportPlaintextFile(const StringX &ImportedPrefix,
                                             UpdateGUICommand::GUI_REDO_IMPORT);
   pmulticmds->Add(pcmd2);
 
-  if (numImported > 0)
-    SetDBChanged(true);
-
   return ((numSkipped + numRenamed + numPWHErrors + numshortcutsremoved)) == 0 ?
              SUCCESS : OK_WITH_ERRORS;
 }
@@ -1469,7 +1495,7 @@ int PWScore::ImportKeePassV1TXTFile(const StringX &filename,
 
   stringT cs_error;
   CUTF8Conv conv;
-  pcommand = NULL;
+  pcommand = nullptr;
   numImported  = numSkipped = numRenamed = 0;
   uiReasonCode = 0;
 
@@ -1477,7 +1503,7 @@ int PWScore::ImportKeePassV1TXTFile(const StringX &filename,
   // characters even though we need the file to contain ASCII and UTF-8 characters
   // and not Unicode (wchar_t).
   FILE *fs = pws_os::FOpen(filename.c_str(), _T("rt"));
-  if (fs == NULL)
+  if (fs == nullptr)
     return CANT_OPEN_FILE;
 
   // We need to use file stream I/O but can't with standard FILE I/O
@@ -1798,7 +1824,6 @@ int PWScore::ImportKeePassV1TXTFile(const StringX &filename,
 
     ci_temp.SetStatus(CItemData::ES_ADDED);
 
-    GUISetupDisplayInfo(ci_temp);
     Command *pcmd = AddEntryCommand::Create(this, ci_temp);
     pcmd->SetNoGUINotify();
     pmulticmds->Add(pcmd);
@@ -1811,7 +1836,6 @@ int PWScore::ImportKeePassV1TXTFile(const StringX &filename,
     rpt.WriteLine(sx_imported.c_str());
   }
 
-  SetDBChanged(true);
   return SUCCESS;
 }
 
@@ -1877,7 +1901,7 @@ int PWScore::ImportKeePassV1CSVFile(const StringX &filename,
 {
   stringT strError;
   CUTF8Conv conv;
-  pcommand = NULL;
+  pcommand = nullptr;
   numImported  = numSkipped = numRenamed = 0;
   uiReasonCode = 0;
 
@@ -1885,7 +1909,7 @@ int PWScore::ImportKeePassV1CSVFile(const StringX &filename,
   // characters even though we need the file to contain ASCII and UTF-8 characters
   // and not Unicode (wchar_t).
   FILE *fs = pws_os::FOpen(filename.c_str(), _T("rt"));
-  if (fs == NULL)
+  if (fs == nullptr)
     return CANT_OPEN_FILE;
 
   // We need to use file stream I/O but can't with standard FILE I/O
@@ -1982,7 +2006,7 @@ int PWScore::ImportKeePassV1CSVFile(const StringX &filename,
   for (size_t i = 0; i < hdr_tokens.size(); i++) {
     vector<StringX>::iterator it(std::find(vs_Header.begin(), vs_Header.end(), hdr_tokens[i]));
     if (it != vs_Header.end()) {
-      i_Offset[it - vs_Header.begin()] = i;
+      i_Offset[it - vs_Header.begin()] = (int)i;
       num_found++;
     }
   }
@@ -2281,9 +2305,6 @@ int PWScore::ImportKeePassV1CSVFile(const StringX &filename,
 
     ci_temp.SetStatus(CItemData::ES_ADDED);
 
-    // Get GUI to populate its field
-    GUISetupDisplayInfo(ci_temp);
-
     // Add to commands to execute
     Command *pcmd = AddEntryCommand::Create(this, ci_temp);
     pcmd->SetNoGUINotify();
@@ -2296,9 +2317,6 @@ int PWScore::ImportKeePassV1CSVFile(const StringX &filename,
                         sx_group.c_str(), sx_title.c_str(), sx_user.c_str());
     rpt.WriteLine(sx_imported.c_str());
   } // file processing for (;;) loop
-
-  if (numImported > 0)
-    SetDBChanged(true);
 
   return ((numSkipped + numRenamed)) == 0 ? SUCCESS : OK_WITH_ERRORS;
 }

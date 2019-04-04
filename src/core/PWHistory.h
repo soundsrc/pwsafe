@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -57,6 +57,7 @@ PWHistEntry() : changetttdate(0), changedate(), password() {}
 PWHistEntry(const PWHistEntry &that) :
   changetttdate(that.changetttdate), changedate(that.changedate),
     password(that.password) {}
+
   PWHistEntry &operator=(const PWHistEntry &that)
   { if (this != &that) {
       changetttdate = that.changetttdate;
@@ -65,6 +66,23 @@ PWHistEntry(const PWHistEntry &that) :
     }
     return *this;
   }
+};
+
+namespace PWHist {
+  // Following values are used in the Manage Options
+  // to bulk modify the password histories.
+  // The origin of these values is in how they were
+  // implemented in Windows - do not change.
+  enum Action {NOCHANGE = 0,
+               STOP_INCL_PROT = -1,
+               STOP_EXCL_PROT  = 1,
+               START_INCL_PROT = -2,
+               START_EXCL_PROT  = 2,
+               SETMAX_INCL_PROT = -3,
+               SETMAX_EXCL_PROT  = 3,
+               CLEAR_INCL_PROT = -4,
+               CLEAR_EXCL_PROT  = 4,
+  };
 };
 
 typedef std::vector<PWHistEntry> PWHistList;
@@ -79,11 +97,12 @@ bool CreatePWHistoryList(const StringX &pwh_str,
                          size_t &pwh_max, size_t &num_err,
                          PWHistList &pwhl, PWSUtil::TMC time_format);
 
-StringX MakePWHistoryHeader(BOOL status, size_t pwh_max, size_t pwh_num);
+StringX GetPreviousPassword(const StringX &pwh_str);
+
+StringX MakePWHistoryHeader(bool status, size_t pwh_max, size_t pwh_num);
 
 #endif
 //-----------------------------------------------------------------------------
 // Local variables:
 // mode: c++
 // End:
-

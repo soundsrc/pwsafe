@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -149,7 +149,7 @@ BOOL CCoolMenuManager::CMOnMeasureItem(LPMEASUREITEMSTRUCT lpmis)
     dc.SelectObject(pOldFont);
 
     // height of item is just height of a standard menu item
-    lpmis->itemHeight = max(GetSystemMetrics(SM_CYMENU), rcText.Height());
+    lpmis->itemHeight = std::max(GetSystemMetrics(SM_CYMENU), rcText.Height());
 
     // width is width of text plus a bunch of stuff
     int cx = rcText.Width();    // text width
@@ -460,7 +460,7 @@ void CCoolMenuManager::ConvertMenu(CMenu* pMenu, UINT /* nIndex */,
           else
           if (iCtrlID >= ID_MENUITEM_TRAYVIEWEDIT1 &&
               iCtrlID <= ID_MENUITEM_TRAYVIEWEDITMAX)
-            iCtrlID = ID_MENUITEM_EDIT;
+            iCtrlID = ID_MENUITEM_EDITENTRY;
           else
           if (iCtrlID >= ID_MENUITEM_TRAYSENDEMAIL1 &&
               iCtrlID <= ID_MENUITEM_TRAYSENDEMAILMAX)

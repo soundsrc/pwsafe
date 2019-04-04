@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -10,12 +10,23 @@
 #include "PWDialog.h"
 #include "ControlExtns.h"
 #include "DDStatic.h"
+#include "PWTouch.h"
 
 #include "core/StringX.h"
 #include "core/coredefs.h"
 #include "core/PWPolicy.h"
 
 #include "resource.h"
+
+// PolicyNames CListCtrl
+class CPNListCtrlX : public CListCtrl {
+};
+
+/**
+* typedef to hide the fact that CPNListCtrl is really a mixin.
+*/
+
+typedef CPWTouch< CPNListCtrlX > CPNListCtrl;
 
 // CManagePSWDPols dialog
 
@@ -36,16 +47,16 @@ public:
   bool IsChanged() const {return m_bChanged;}
 
 protected:
-  CListCtrl m_PolicyNames;
+  CPNListCtrl m_PolicyNames;
   CListCtrl m_PolicyDetails;
   CListCtrl m_PolicyEntries;
 
   CSecEditExtn m_ex_password;
   CSecString m_password;
 
-  virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
+  virtual void DoDataExchange(CDataExchange *pDX);    // DDX/DDV support
   virtual BOOL OnInitDialog();
-  virtual BOOL PreTranslateMessage(MSG* pMsg);
+  virtual BOOL PreTranslateMessage(MSG *pMsg);
 
   afx_msg void OnHelp();
   afx_msg void OnCancel();
@@ -87,7 +98,11 @@ private:
 
   GTUSet m_setGTU;
 
-  CBitmap m_CopyPswdBitmap;
+  CBitmap m_CopyPswdBitmap, m_DisabledCopyPswdBitmap;
+  CButton *m_pCopyBtn;
+
+  bool m_bCopyPasswordEnabled;
+  BOOL m_bImageLoaded, m_bDisabledImageLoaded;
   
   int m_iSortNamesIndex, m_iSortEntriesIndex;
   bool m_bSortNamesAscending, m_bSortEntriesAscending;

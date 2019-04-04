@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -12,6 +12,8 @@
 */
 
 #include <Afxcmn.h>
+
+#include "PWTouch.h"
 #include "SecString.h"
 #include "Fonts.h"
 
@@ -26,11 +28,11 @@ class CPWTDropTarget;
 class CPWTDataSource;
 class CPWTDropSource;
 
-class CPWTreeCtrl : public CTreeCtrl
+class CPWTreeCtrlX : public CTreeCtrl
 {
 public:
-  CPWTreeCtrl();
-  ~CPWTreeCtrl();
+  CPWTreeCtrlX();
+  ~CPWTreeCtrlX();
 
   // indices of bitmaps in ImageList
   // NOTE for normal and base entries items, order MUST be: 
@@ -56,7 +58,8 @@ public:
   HTREEITEM AddGroup(const CString &path, bool &bAlreadyExists);
   void SortTree(const HTREEITEM htreeitem);
   bool IsLeaf(HTREEITEM hItem) const;
-  int CountChildren(HTREEITEM hStartItem) const;
+  int CountChildren(HTREEITEM hStartItem, bool bRecurse = true) const;
+  int CountLeafChildren(HTREEITEM hStartItem) const;
   CSecString MakeTreeDisplayString(const CItemData &ci) const;
   void SetRestoreMode(bool flag) {m_isRestoring = flag;}
   void OnCollapseAll();
@@ -87,8 +90,10 @@ public:
   HTREEITEM FindItem(const CString &path, HTREEITEM hRoot);
   const StringX &GetDroppedFile() const {return m_droppedFile;}
 
-protected:
-  //{{AFX_MSG(CPWTreeCtrl)
+ protected:
+  virtual BOOL PreTranslateMessage(MSG *pMsg);
+
+  //{{AFX_MSG(CPWTreeCtrlX)
   afx_msg void OnBeginLabelEdit(NMHDR *pNotifyStruct, LRESULT *pLResult);
   afx_msg void OnEndLabelEdit(NMHDR *pNotifyStruct, LRESULT *pLResult);
   afx_msg void OnExpandCollapse(NMHDR *pNotifyStruct, LRESULT *pLResult);
@@ -105,7 +110,6 @@ protected:
   afx_msg void OnVScroll(UINT nSBCode, UINT nPos, CScrollBar *pScrollBar);
   //}}AFX_MSG
 
-  BOOL PreTranslateMessage(MSG* pMsg);
   BOOL OnRenderGlobalData(LPFORMATETC lpFormatEtc, HGLOBAL* phGlobal);
   BOOL RenderTextData(CLIPFORMAT &cfFormat, HGLOBAL* phGlobal);
   BOOL RenderAllData(HGLOBAL* phGlobal);
@@ -128,10 +132,11 @@ private:
 
   // in an ideal world, following would be is-a, rather than has-a
   // (multiple inheritance) Microsoft doesn't really support this, however...
-  CPWTDropTarget *m_DropTarget;
-  CPWTDropSource *m_DropSource;
-  CPWTDataSource *m_DataSource;
+  CPWTDropTarget *m_pDropTarget;
+  CPWTDropSource *m_pDropSource;
+  CPWTDataSource *m_pDataSource;
   friend class CPWTDataSource;
+
   // Clipboard format for our Drag & Drop
   CLIPFORMAT m_tcddCPFID;
   HGLOBAL m_hgDataALL, m_hgDataUTXT, m_hgDataTXT;
@@ -161,9 +166,18 @@ private:
   bool m_bShowNotes, m_bMouseInWindow;
 
   // Filter
-  bool m_bFilterActive;
+  bool m_bTreeFilterActive;
   bool m_bEditLabelCompleted;
 
   bool m_bUseHighLighting;
-  std::vector<StringX> m_vnodes_modified;
+  std::vector<StringX> m_vModifiedNodes;
+
+  bool m_bUseNewProtectedSymbol, m_bUseNewAttachmentSymbol;
+  std::wstring m_sProtectSymbol, m_sAttachmentSymbol;
 };
+
+/**
+* typedef to hide the fact that CPWTreeCtrl is really a mixin.
+*/
+
+typedef CPWTouch< CPWTreeCtrlX > CPWTreeCtrl;

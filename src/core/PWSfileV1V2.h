@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -19,7 +19,7 @@ class PWSfileV1V2 : public PWSfile
 {
 public:
   static int CheckPasskey(const StringX &filename,
-                          const StringX &passkey, FILE *a_fd = NULL);
+                          const StringX &passkey, FILE *a_fd = nullptr);
 
   PWSfileV1V2(const StringX &filename, RWmode mode, VERSION version);
   ~PWSfileV1V2();

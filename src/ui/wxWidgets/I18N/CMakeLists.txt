@@ -9,7 +9,7 @@
 #
 # Parent CMakeLists.txt already called find_package(Gettext)
 
-set (LANGS "da" "de" "es" "fr" "it" "ko" "nl" "pl" "ru" "sv" "zh")
+set (LANGS "da" "de" "es" "fr" "hu" "it" "ko" "nl" "pl" "ru" "sv" "zh")
 
 
 # In general, globbing the source file's not recommended for cmake,
@@ -28,6 +28,7 @@ file (GLOB I18N_SRCS
   "${SRC_BASE_DIR}/ui/wxWidgets/*.h"
   "${SRC_BASE_DIR}/core/*.cpp"
   "${SRC_BASE_DIR}/core/*.h"
+  "${CMAKE_BINARY_DIR}/src/core/core_st.*"
   "${SRC_BASE_DIR}/os/unix/*.cpp"
   "${SRC_BASE_DIR}/os/unix/*.h"
   )

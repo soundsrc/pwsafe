@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -9,7 +9,6 @@
 /** \file PwsSync.cpp
 *
 */
-
 
 // For compilers that support precompilation, includes "wx/wx.h".
 #include "wx/wxprec.h"
@@ -66,7 +65,7 @@ class SyncWizardPage: public wxWizardPageSimple
 {
 protected:
   SyncData* m_syncData;
-  typedef enum {BACKWARD, FORWARD} PageDirection;
+  enum class PageDirection { BACKWARD, FORWARD };
   wxBoxSizer* m_pageSizer;
 
 public:
@@ -76,9 +75,9 @@ public:
   void OnWizardPageChanging(wxWizardEvent& evt);
   void OnWizardPageChanged(wxWizardEvent& evt);
 
-  virtual void OnPageEnter(PageDirection /*dir*/) {}
+  virtual void OnPageEnter(PageDirection /*direction*/) {}
   //return false to veto the page change
-  virtual bool OnPageLeave(PageDirection /*dir*/) {return true;}
+  virtual bool OnPageLeave(PageDirection /*direction*/) { return true; }
 
   void SetChildWindowText(unsigned id, const wxString& str);
 
@@ -117,7 +116,6 @@ public:
   virtual bool OnPageLeave(PageDirection dir);
   virtual void SaveData(SyncData* data);
 };
-
 
 //helper class used by field selection page to construct the UI
 struct SyncFieldSelection {
@@ -213,7 +211,6 @@ public:
   virtual void OnPageEnter(PageDirection dir);
 };
 
-
 ///////////////////////////////////////////////////
 // PwsSyncWizard Implementation
 //
@@ -242,10 +239,10 @@ PwsSyncWizard::PwsSyncWizard(wxWindow* parent, PWScore* core):
 
   m_page1 = new SyncStartPage(this, m_syncData);
 
-  DbSelectionPage*        page2 = new DbSelectionPage(this, m_syncData);
-  SyncFieldSelectionPage* page3 = new SyncFieldSelectionPage(this, m_syncData);
-  SyncOptionsSummaryPage* page4 = new SyncOptionsSummaryPage(this, m_syncData);
-  SyncStatusPage*         page5 = new SyncStatusPage(this, m_syncData);
+  auto *page2 = new DbSelectionPage(this, m_syncData);
+  auto *page3 = new SyncFieldSelectionPage(this, m_syncData);
+  auto *page4 = new SyncOptionsSummaryPage(this, m_syncData);
+  auto *page5 = new SyncStatusPage(this, m_syncData);
 
   m_page1->SetNext(page2);
   page2->SetPrev(m_page1);
@@ -293,7 +290,6 @@ CReport* PwsSyncWizard::GetReport() const {
   return &m_syncData->syncReport;
 }
 
-
 ////////////////////////////////////////////
 //SyncWizardPage implementation
 //
@@ -325,7 +321,7 @@ void SyncWizardPage::OnWizardPageChanging(wxWizardEvent& evt)
   SyncWizardPage* page = wxDynamicCast(evt.GetPage(), SyncWizardPage);
   wxASSERT_MSG(page, wxT("Sync wizard page not derived from SyncWizardPage class"));
 
-  if (!page->OnPageLeave(evt.GetDirection()? FORWARD: BACKWARD))
+  if (!page->OnPageLeave(evt.GetDirection() ? PageDirection::FORWARD : PageDirection::BACKWARD))
     evt.Veto();
 
   //must always do this, to let the wizard see the event as well
@@ -337,7 +333,7 @@ void SyncWizardPage::OnWizardPageChanged(wxWizardEvent& evt)
   SyncWizardPage* page = wxDynamicCast(evt.GetPage(), SyncWizardPage);
   wxASSERT_MSG(page, wxT("Sync wizard page not derived from SyncWizardPage class"));
 
-  page->OnPageEnter(evt.GetDirection()? FORWARD: BACKWARD);
+  page->OnPageEnter(evt.GetDirection() ? PageDirection::FORWARD : PageDirection::BACKWARD);
 
   //must always do this, to let the wizard see the event as well
   evt.Skip();
@@ -347,7 +343,6 @@ void SyncWizardPage::SetChildWindowText(unsigned id, const wxString& str)
 {
   FindWindow(id)->SetLabel(str);
 }
-
 
 ////////////////////////////////////////////
 //SyncStartPage implementation
@@ -368,7 +363,7 @@ SyncStartPage::SyncStartPage(wxWizard* parent, SyncData* data) : SyncWizardPage(
     _("4. You can undo the operation once it is complete, but won't be\nable to abort it mid-way.")
   };
 
-  wxBoxSizer* paneSizer = new wxBoxSizer(wxVERTICAL);
+  auto *paneSizer = new wxBoxSizer(wxVERTICAL);
   for (size_t idx = 0; idx < NumberOf(helpItems); ++idx) {
     paneSizer->Add(new wxStaticText(pane->GetPane(), wxID_ANY, helpItems[idx]), wxSizerFlags().Expand().Border().Proportion(1));
   }
@@ -393,9 +388,9 @@ DbSelectionPage::DbSelectionPage(wxWizard* parent, SyncData* data):
   SetSizerAndFit(sizer);
 }
 
-bool DbSelectionPage::OnPageLeave(PageDirection dir)
+bool DbSelectionPage::OnPageLeave(PageDirection direction)
 {
-  return dir == BACKWARD || m_panel->DoValidation();
+  return (direction == PageDirection::BACKWARD) || m_panel->DoValidation();
 }
 
 void DbSelectionPage::SaveData(SyncData* data)
@@ -418,16 +413,15 @@ SyncFieldSelectionPage::SyncFieldSelectionPage(wxWizard* parent, SyncData* data)
   SetSizerAndFit(sizer);
 }
 
-bool SyncFieldSelectionPage::OnPageLeave(PageDirection dir)
+bool SyncFieldSelectionPage::OnPageLeave(PageDirection direction)
 {
-  return dir == BACKWARD || m_panel->DoValidation();
+  return (direction == PageDirection::BACKWARD) || m_panel->DoValidation();
 }
 
 void SyncFieldSelectionPage::SaveData(SyncData* data)
 {
   data->selCriteria = *m_panel->m_criteria;
 }
-
 
 //////////////////////////////////////////////////////
 // SyncOptionsSummaryPage implementation
@@ -466,9 +460,9 @@ SyncOptionsSummaryPage::SyncOptionsSummaryPage(wxWizard* parent, SyncData* data)
   SetSizerAndFit(sizer);
 }
 
-void SyncOptionsSummaryPage::OnPageEnter(PageDirection dir)
+void SyncOptionsSummaryPage::OnPageEnter(PageDirection direction)
 {
-  if (dir == BACKWARD)
+  if (direction == PageDirection::BACKWARD)
     return;
 
   m_updatedFieldsGrid->Clear(true);
@@ -519,7 +513,7 @@ SyncStatusPage::SyncStatusPage(wxWizard* parent, SyncData* data): SyncWizardPage
   sizer->Add(new wxStaticText(this, ID_HEADER_TXT, wxEmptyString), flags.Proportion(1));
   sizer->AddSpacer(RowSeparation);
 
-  wxBoxSizer* midSizer = new wxBoxSizer(wxVERTICAL);
+  auto *midSizer = new wxBoxSizer(wxVERTICAL);
   midSizer->Add(new wxStaticText(this, ID_PROGRESS_TXT, wxEmptyString), wxSizerFlags().Expand().Proportion(1));
   midSizer->AddSpacer(RowSeparation);
   size_t range = data->core->GetNumEntries();
@@ -527,7 +521,7 @@ SyncStatusPage::SyncStatusPage(wxWizard* parent, SyncData* data): SyncWizardPage
   midSizer->Add(new wxGauge(this, ID_GAUGE, int(range)), wxSizerFlags().Expand().Proportion(0));
   sizer->Add(midSizer, flags.Proportion(1));
 
-  wxBoxSizer* horizSizer = new wxBoxSizer(wxHORIZONTAL);
+  auto *horizSizer = new wxBoxSizer(wxHORIZONTAL);
   horizSizer->Add(new wxStaticText(this, ID_FINISH_TXT, wxEmptyString), wxSizerFlags().Expand().Proportion(1));
   horizSizer->Add(new wxCheckBox(this, ID_SHOW_REPORT, _("See a detailed report"), wxDefaultPosition,
                       wxDefaultSize, 0, wxGenericValidator(&m_syncData->showReport)),
@@ -552,14 +546,14 @@ void SyncStatusPage::SetHeaderText(const wxString& str)
   SetChildWindowText(ID_HEADER_TXT, str);
 }
 
-void SyncStatusPage::OnPageEnter(PageDirection dir)
+void SyncStatusPage::OnPageEnter(PageDirection direction)
 {
-  if (dir == FORWARD) {
+  if (direction == PageDirection::FORWARD) {
     //we came here from the previous page
 
     FindWindow(ID_SHOW_REPORT)->Hide();
 
-    PWSAuxCore* othercore = new PWSAuxCore;
+    auto *othercore = new PWSAuxCore;
     const wxString otherDBPath = m_syncData->otherDB.GetFullPath();
     const int rc = ReadCore(*othercore, otherDBPath, m_syncData->combination,
                                     false, this);
@@ -585,7 +579,7 @@ void SyncStatusPage::OnPageEnter(PageDirection dir)
 
 void SyncStatusPage::OnSyncStartEvent(wxCommandEvent& evt)
 {
-  PWScore* otherCore = reinterpret_cast<PWScore*>(evt.GetClientData());
+  auto *otherCore = reinterpret_cast<PWScore*>(evt.GetClientData());
   wxASSERT_MSG(otherCore, wxT("Sync Start Event did not arrive with the other PWScore"));
   Synchronize(m_syncData->core, otherCore);
 
@@ -666,10 +660,10 @@ void SyncStatusPage::Synchronize(PWScore* currentCore, const PWScore *otherCore)
   for (otherPos = otherCore->GetEntryIter();
        otherPos != otherCore->GetEntryEndIter();
        otherPos++) {
-    CItemData otherItem = otherCore->GetEntry(otherPos);
+    const CItemData &otherItem = otherCore->GetEntry(otherPos);
     CItemData::EntryType et = otherItem.GetEntryType();
 
-    const size_t currentIndex = std::distance(otherCore->GetEntryIter(), otherPos);
+    const auto currentIndex = std::distance(otherCore->GetEntryIter(), otherPos);
     gauge->SetValue(int(currentIndex));
 
     // Do not process Aliases and Shortcuts
@@ -697,7 +691,6 @@ void SyncStatusPage::Synchronize(PWScore* currentCore, const PWScore *otherCore)
       // found a match
       CItemData curItem = currentCore->GetEntry(foundPos);
       CItemData updItem(curItem);
-      updItem.SetDisplayInfo(NULL);
 
       uuid_array_t current_uuid, other_uuid;
       curItem.GetUUID(current_uuid);
@@ -708,7 +701,7 @@ void SyncStatusPage::Synchronize(PWScore* currentCore, const PWScore *otherCore)
 
       bool bUpdated(false);
       for (int i = 0; i < (int)criteria.TotalFieldsCount(); i++) {
-        CItemData::FieldType ft = (CItemData::FieldType)i;
+        auto ft = (CItemData::FieldType)i;
         if (criteria.IsFieldSelected(ft)) {
           const StringX sxValue = otherItem.GetFieldValue(ft);
           if (sxValue != updItem.GetFieldValue(ft)) {

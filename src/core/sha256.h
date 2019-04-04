@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -18,7 +18,8 @@
 class SHA256
 {
 public:
-  enum {HASHLEN = 32, BLOCKSIZE = 64};
+  static const unsigned int HASHLEN = 32;
+  static const unsigned int BLOCKSIZE = 64;
   SHA256();
   ~SHA256();
   void Update(const unsigned char *in, size_t inlen);

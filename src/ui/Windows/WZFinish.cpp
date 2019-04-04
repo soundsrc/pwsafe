@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -29,11 +29,10 @@
 IMPLEMENT_DYNAMIC(CWZFinish, CWZPropertyPage)
 
 CWZFinish::CWZFinish(CWnd *pParent, UINT nIDCaption, const int nType)
- : CWZPropertyPage(IDD, nIDCaption, nType), m_pothercore(NULL), m_prpt(NULL),
-   m_pExecuteThread(NULL), m_bInProgress(false), m_bComplete(false), 
-   m_bInitDone(false), m_bViewingReport(false), m_status(-1), m_numProcessed(-1)
+ : CWZPropertyPage(IDD, nIDCaption, nType), m_pothercore(nullptr), m_prpt(nullptr),
+   m_pExecuteThread(nullptr), m_bInProgress(false), m_bComplete(false), 
+  m_bInitDone(false), m_bViewingReport(false), m_status(-1), m_numProcessed(-1)
 {
-  // Save pointer to my PropertySheet
   m_pWZPSH = (CWZPropertySheet *)pParent;
 }
 
@@ -79,6 +78,22 @@ BOOL CWZFinish::OnInitDialog()
       m_pWZPSH->GetDlgItem(IDC_ABORT)->SetWindowText(cs_Abort);
       break;
     }
+    // don't show report button when there's nothing to report:
+    // The following export operations cannot fail, hence no sense
+    // in confusing user with report
+    case ID_MENUITEM_EXPORT2PLAINTEXT:
+    case ID_MENUITEM_EXPORTENT2PLAINTEXT:
+    case ID_MENUITEM_EXPORTGRP2PLAINTEXT:
+    case ID_MENUITEM_EXPORTENT2DB:
+    case ID_MENUITEM_EXPORTGRP2DB:
+    case ID_MENUITEM_EXPORTFILTERED2DB:
+      // XML export may fail, so we'll show the report button if so
+      // at the end of the export
+    case ID_MENUITEM_EXPORT2XML:
+    case ID_MENUITEM_EXPORTENT2XML:
+    case ID_MENUITEM_EXPORTGRP2XML:
+      GetDlgItem(IDC_VIEWREPORT)->ShowWindow(SW_HIDE);
+      // deliberate fallthrough
     default:
       m_pWZPSH->GetDlgItem(IDCANCEL)->EnableWindow(FALSE);
       m_pWZPSH->GetDlgItem(IDCANCEL)->ShowWindow(SW_HIDE);
@@ -86,7 +101,7 @@ BOOL CWZFinish::OnInitDialog()
 
   m_bInitDone = true;
 
-  return TRUE;
+  return TRUE;  // return TRUE unless you set the focus to a control
 }
 
 void CWZFinish::OnAbort()
@@ -143,8 +158,10 @@ static UINT WZExecuteThread(LPVOID pParam)
       break;
     case ID_MENUITEM_EXPORTENT2DB:
     case ID_MENUITEM_EXPORTGRP2DB:
+    case ID_MENUITEM_EXPORTFILTERED2DB:
       status = pthdpms->pWZPSH->WZPSHDoExportDB(pthdpms->sx_Filename,
-                   pthdpms->nID, pthdpms->sx_exportpasskey,
+                   pthdpms->nID, pthdpms->bExportDBFilters,
+                   pthdpms->sx_exportpasskey,
                    pthdpms->numProcessed, pthdpms->prpt);
       break;
     default:
@@ -152,9 +169,7 @@ static UINT WZExecuteThread(LPVOID pParam)
       break;
   }
 
-  // Set the thread return code for caller
-  pthdpms->status = status;
-
+  pthdpms->status = status; // Set the thread return code for caller
   pthdpms->pWZFinish->PostMessage(PWS_MSG_WIZARD_EXECUTE_THREAD_ENDED, (WPARAM)pthdpms, 0);
 
   return 0;
@@ -184,6 +199,7 @@ BOOL CWZFinish::OnSetActive()
     case ID_MENUITEM_EXPORTGRP2XML:
     case ID_MENUITEM_EXPORTENT2DB:
     case ID_MENUITEM_EXPORTGRP2DB:
+    case ID_MENUITEM_EXPORTFILTERED2DB:
       uifilemsg = IDS_WZEXPORTFILE;
       break;
     default:
@@ -227,6 +243,7 @@ int CWZFinish::ExecuteAction()
     case ID_MENUITEM_EXPORTGRP2XML:
     case ID_MENUITEM_EXPORTENT2DB:
     case ID_MENUITEM_EXPORTGRP2DB:
+    case ID_MENUITEM_EXPORTFILTERED2DB:
       break;
     default:
       ASSERT(0);
@@ -238,7 +255,7 @@ int CWZFinish::ExecuteAction()
 
   if (bOtherIsDB) {
     // Not really needed but...
-    m_pothercore->ClearData();
+    m_pothercore->ClearDBData();
 
     // Reading a new file changes the preferences as they are instance dependent
     // not core dependent
@@ -264,27 +281,27 @@ int CWZFinish::ExecuteAction()
       case PWScore::SUCCESS:
         break;
       case PWScore::CANT_OPEN_FILE:
-        cs_temp.Format(IDS_CANTOPENREADING, sx_Filename2.c_str());
+        cs_temp.Format(IDS_CANTOPENREADING, static_cast<LPCWSTR>(sx_Filename2.c_str()));
         cs_title.LoadString(IDS_FILEREADERROR);
         gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONWARNING);
         break;
       case PWScore::BAD_DIGEST:
-        cs_temp.Format(IDS_FILECORRUPT, sx_Filename2.c_str());
+        cs_temp.Format(IDS_FILECORRUPT, static_cast<LPCWSTR>(sx_Filename2.c_str()));
         cs_title.LoadString(IDS_FILEREADERROR);
         gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONERROR);
         break;
       default:
-        cs_temp.Format(IDS_UNKNOWNERROR, sx_Filename2.c_str());
+        cs_temp.Format(IDS_UNKNOWNERROR, static_cast<LPCWSTR>(sx_Filename2.c_str()));
         cs_title.LoadString(IDS_FILEREADERROR);
         gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONERROR);
         break;
     }
 
     if (rc != PWScore::SUCCESS) {
-      m_pothercore->ClearData();
+      m_pothercore->ClearDBData();
       m_pothercore->SetCurFile(L"");
       delete m_pothercore;
-      m_pothercore = NULL;
+      m_pothercore = nullptr;
       return rc;
     }
   }
@@ -295,10 +312,11 @@ int CWZFinish::ExecuteAction()
 
     m_pWZPSH->WZPSHSetUpdateWizardWindow(GetDlgItem(IDC_ENTRY));
 
-    if (m_prpt == NULL)
+    if (m_prpt == nullptr)
       m_prpt = new CReport;
 
     const bool bAdvanced = m_pWZPSH->GetAdvanced();
+    const bool bExportDBFilters = m_pWZPSH->GetExportDBFilters();
 
     m_thdpms.pWZFinish = this;
     m_thdpms.nID = nID;
@@ -308,12 +326,13 @@ int CWZFinish::ExecuteAction()
     m_thdpms.sx_Filename = sx_Filename2;
     m_thdpms.sx_exportpasskey = m_pWZPSH->GetExportPassKey();
     m_thdpms.bAdvanced = bAdvanced;
+    m_thdpms.bExportDBFilters = bExportDBFilters;
 
     m_pExecuteThread = AfxBeginThread(WZExecuteThread, &m_thdpms,
                                 THREAD_PRIORITY_NORMAL, 0, CREATE_SUSPENDED);
 
-    if (m_pExecuteThread == NULL) {
-      pws_os::Trace(_T("Unable to create Execute thread\n"));
+    if (m_pExecuteThread == nullptr) {
+      pws_os::Trace(L"Unable to create Execute thread\n");
       return PWScore::FAILURE;
     }
 
@@ -332,7 +351,7 @@ LRESULT CWZFinish::OnExecuteThreadEnded(WPARAM , LPARAM )
 
   // Now tidy up (m_bAutoDelete was set to FALSE)
   delete m_pExecuteThread;
-  m_pExecuteThread = NULL;
+  m_pExecuteThread = nullptr;
 
   m_bComplete = true;
   m_pWZPSH->SetCompleted(true);
@@ -367,6 +386,7 @@ LRESULT CWZFinish::OnExecuteThreadEnded(WPARAM , LPARAM )
       case ID_MENUITEM_EXPORTGRP2PLAINTEXT:
       case ID_MENUITEM_EXPORTENT2DB:
       case ID_MENUITEM_EXPORTGRP2DB:
+      case ID_MENUITEM_EXPORTFILTERED2DB:
         cs_results.Format(IDS_EXPORTED, m_thdpms.numProcessed);
         break;
       case ID_MENUITEM_EXPORT2XML:
@@ -374,6 +394,10 @@ LRESULT CWZFinish::OnExecuteThreadEnded(WPARAM , LPARAM )
       case ID_MENUITEM_EXPORTGRP2XML:
         cs_results.Format(IDS_EXPORTED, m_thdpms.numProcessed);
         if (m_thdpms.status == PWScore::OK_WITH_ERRORS) {
+          // for export we hide the View Report button, but if something went wrong
+          // we show it.
+          // Might be worth adopting this approach in general...
+          GetDlgItem(IDC_VIEWREPORT)->ShowWindow(SW_SHOW);
           CString cs_errors(MAKEINTRESOURCE(IDSC_XMLCHARACTERERRORS));
           cs_results += L"\n\n";
           cs_results += cs_errors;
@@ -387,14 +411,12 @@ LRESULT CWZFinish::OnExecuteThreadEnded(WPARAM , LPARAM )
   }
 
   // Tidy up other core
-  if (m_pothercore != NULL) {
-    if (m_pothercore->IsLockedFile(m_pothercore->GetCurFile().c_str()))
-      m_pothercore->UnlockFile(m_pothercore->GetCurFile().c_str());
-
-    m_pothercore->ClearData();
+  if (m_pothercore != nullptr) {
+    m_pothercore->SafeUnlockCurFile();
+    m_pothercore->ClearDBData();
     m_pothercore->SetCurFile(L"");
     delete m_pothercore;
-    m_pothercore = NULL;
+    m_pothercore = nullptr;
   }
 
   GetDlgItem(IDC_STATIC_WZRESULTS)->SetWindowText(cs_results);
@@ -409,7 +431,7 @@ LRESULT CWZFinish::OnExecuteThreadEnded(WPARAM , LPARAM )
   // Enable View Report button
   GetDlgItem(IDC_VIEWREPORT)->EnableWindow(TRUE);
 
-  m_pWZPSH->WZPSHSetUpdateWizardWindow(NULL);
+  m_pWZPSH->WZPSHSetUpdateWizardWindow(nullptr);
 
   // In Compare status == 0 means identical, status != 0 means different
   // Details placed in results summary.
@@ -445,7 +467,7 @@ LRESULT CWZFinish::OnExecuteThreadEnded(WPARAM , LPARAM )
             break;
         }
         cs_temp.LoadString(uiMsg);
-        cs_text.Format(IDS_WZACTIONFAILED, cs_temp);
+        cs_text.Format(IDS_WZACTIONFAILED, static_cast<LPCWSTR>(cs_temp));
       } else
         cs_text.LoadString(IDS_COMPLETE);
     }
@@ -462,7 +484,7 @@ void CWZFinish::OnViewReport()
   if (m_bViewingReport)
     return;
 
-  if (m_prpt != NULL) {
+  if (m_prpt != nullptr) {
     // Stop us doing it again and stop user ending Wizard
     m_bViewingReport = true;
     m_pWZPSH->EnableWindow(FALSE);

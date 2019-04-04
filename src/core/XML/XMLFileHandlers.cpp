@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -34,8 +34,8 @@ using pws_os::CUUID;
 
 XMLFileHandlers::XMLFileHandlers()
 {
-  m_cur_entry = NULL;
-  m_cur_pwhistory_entry = NULL;
+  m_cur_entry = nullptr;
+  m_cur_pwhistory_entry = nullptr;
   m_sxElemContent = _T("");
 
   m_delimiter = _T('\0');
@@ -92,6 +92,7 @@ bool XMLFileHandlers::ProcessStartElement(const int icurrent_element)
       m_numNoPolicies = 0;
       m_numRenamedPolicies = 0;
       m_numShortcutsRemoved = 0;
+      m_numEmptyGroupsImported = 0;
       m_bEntryBeingProcessed = false;
       break;
     case XLE_ENTRY:
@@ -133,7 +134,7 @@ bool XMLFileHandlers::ProcessStartElement(const int icurrent_element)
       if (m_bValidation)
         return false;
 
-      ASSERT(m_cur_pwhistory_entry == NULL);
+      ASSERT(m_cur_pwhistory_entry == nullptr);
       m_cur_pwhistory_entry = new pwhistory_entry;
       m_cur_pwhistory_entry->changed = _T("");
       m_cur_pwhistory_entry->oldpassword = _T("");
@@ -195,7 +196,7 @@ void XMLFileHandlers::ProcessEndElement(const int icurrent_element)
       bpref = PWSprefs::ShowPasswordInTree;
       break;
     case XLE_PREF_SORTASCENDING:
-      bpref = PWSprefs::SortAscending;
+      // Obsolete in 3.40 - keep but do nothing
       break;
     case XLE_PREF_USEDEFAULTUSER:
       bpref = PWSprefs::UseDefaultUser;
@@ -352,8 +353,11 @@ void XMLFileHandlers::ProcessEndElement(const int icurrent_element)
       break;
     case XLE_EGNAME:
       if (!m_sxElemContent.empty() &&
-          find(m_vEmptyGroups.begin(), m_vEmptyGroups.end(), m_sxElemContent) == m_vEmptyGroups.end())
+          find(m_vEmptyGroups.begin(), m_vEmptyGroups.end(), m_sxElemContent) 
+                  == m_vEmptyGroups.end()) {
         m_vEmptyGroups.push_back(m_sxElemContent);
+        m_numEmptyGroupsImported++;
+      }
       break;
 
     // MUST be in the same order as enum beginning STR_GROUP...
@@ -476,20 +480,20 @@ void XMLFileHandlers::ProcessEndElement(const int icurrent_element)
       m_cur_entry->pwhistory += buffer;
       break;
     case XLE_HISTORY_ENTRY:
-      ASSERT(m_cur_pwhistory_entry != NULL);
-      Format(buffer, _T("\xff%s\xff%04x\xff%s"),
+      ASSERT(m_cur_pwhistory_entry != nullptr);
+      Format(buffer, _T("\xff%ls\xff%04x\xff%ls"),
              m_cur_pwhistory_entry->changed.c_str(),
              m_cur_pwhistory_entry->oldpassword.length(),
              m_cur_pwhistory_entry->oldpassword.c_str());
       m_cur_entry->pwhistory += buffer;
       delete m_cur_pwhistory_entry;
-      m_cur_pwhistory_entry = NULL;
+      m_cur_pwhistory_entry = nullptr;
       break;
     case XLE_CHANGEDX:
       m_cur_pwhistory_entry->changed = m_sxElemContent;
       break;
     case XLE_OLDPASSWORD:
-      ASSERT(m_cur_pwhistory_entry != NULL);
+      ASSERT(m_cur_pwhistory_entry != nullptr);
       m_cur_pwhistory_entry->oldpassword = m_sxElemContent;
       break;
     case XLE_ENTRY_PWLENGTH:
@@ -600,13 +604,6 @@ void XMLFileHandlers::AddXMLEntries()
     m_pmulticmds->Add(pcmd);
   }
 
-  // Then add any Empty Groups imported that are not already in the database
-  if (!m_vEmptyGroups.empty()) {
-    Command *pcmd = DBEmptyGroupsCommand::Create(m_pXMLcore, m_vEmptyGroups,
-                           DBEmptyGroupsCommand::EG_ADDALL);
-    m_pmulticmds->Add(pcmd);
-  }
-
   // Get current DB default password policy and that from the XML file and
   // check that they are the same?
   PWPolicy st_to_default_pp, st_import_default_pp;
@@ -651,7 +648,7 @@ void XMLFileHandlers::AddXMLEntries()
         cs_p = CItemData::EngFieldName(CItemData::PASSWORD);
       }
 
-      Format(cs_tp, _T("%s%s%s"), cs_t.c_str(), num == 2 ? _T(" & ") : _T(""), cs_p.c_str());
+      Format(cs_tp, _T("%ls%ls%ls"), cs_t.c_str(), num == 2 ? _T(" & ") : _T(""), cs_p.c_str());
       stringT::iterator new_end = std::remove(cs_tp.begin(), cs_tp.end(), TCHAR('\t'));
       cs_tp.erase(new_end, cs_tp.end());
 
@@ -954,6 +951,7 @@ void XMLFileHandlers::AddXMLEntries()
         m_prpt->WriteLine(sxTemp.c_str());
         m_numShortcutsRemoved++;
       }
+
       // Check if already in use as an the PaswordSafe Application HotKey
       if (m_pXMLcore->GetAppHotKey() == iKBShortcut) {
         // Remove it
@@ -967,7 +965,7 @@ void XMLFileHandlers::AddXMLEntries()
         m_numShortcutsRemoved++;
       }
     }
-    m_pXMLcore->GUISetupDisplayInfo(ci_temp);
+
     Command *pcmd = AddEntryCommand::Create(m_pXMLcore, ci_temp);
     pcmd->SetNoGUINotify();
     m_pmulticmds->Add(pcmd);
@@ -984,6 +982,40 @@ void XMLFileHandlers::AddXMLEntries()
                                                       CItemData::PASSWORD);
   pcmdS->SetNoGUINotify();
   m_pmulticmds->Add(pcmdS);
+
+  // Validate Empty Groups don't have empty sub-groups
+  if (!m_vEmptyGroups.empty()) {
+    std::sort(m_vEmptyGroups.begin(), m_vEmptyGroups.end());
+    std::vector<size_t> viDelete;
+    for (size_t ieg = 0; ieg < m_vEmptyGroups.size() - 1; ieg++) {
+      StringX sxEG = m_vEmptyGroups[ieg] + L".";
+      if (sxEG == m_vEmptyGroups[ieg + 1].substr(0, sxEG.length())) {
+        // Can't be empty as has empty sub-group. Save to delete later
+        viDelete.push_back(ieg);
+      }
+    }
+
+    if (!viDelete.empty()) {
+      // Remove non-empty groups
+      std::vector<size_t>::reverse_iterator rit;
+      for (rit = viDelete.rbegin(); rit != viDelete.rend(); rit++) {
+        m_vEmptyGroups.erase(m_vEmptyGroups.begin() + *rit);
+      }
+    }
+  }
+  
+  // Then add any Empty Groups imported that are not already in the database
+  if (!m_vEmptyGroups.empty()) {
+    if (!m_ImportedPrefix.empty()) {
+      const StringX sxNewPath = StringX(m_ImportedPrefix.c_str()) + StringX(L".");
+      for (size_t i = 0; i < m_vEmptyGroups.size(); i++) {
+        m_vEmptyGroups[i] = sxNewPath + m_vEmptyGroups[i];
+      }
+    }
+    Command *pcmd = DBEmptyGroupsCommand::Create(m_pXMLcore, m_vEmptyGroups,
+                           DBEmptyGroupsCommand::EG_ADDALL);
+    m_pmulticmds->Add(pcmd);
+  }
 
   Command *pcmd2 = UpdateGUICommand::Create(m_pXMLcore,
                                             UpdateGUICommand::WN_EXECUTE_REDO,

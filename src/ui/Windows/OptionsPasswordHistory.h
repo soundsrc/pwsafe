@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -15,6 +15,7 @@
 /////////////////////////////////////////////////////////////////////////////
 // COptionsPasswordHistory dialog
 #include "Options_PropertyPage.h"
+#include "TBMStatic.h"
 
 class COptionsPasswordHistory : public COptions_PropertyPage
 {
@@ -31,17 +32,19 @@ protected:
 
   BOOL m_SavePWHistory, mApplyToProtected;
   int m_PWHistoryNumDefault;
-  int  m_PWHAction;
+  int m_PWHAction;
+  int m_PWHDefExpDays;
   //}}AFX_DATA
 
   CButtonExtn m_chkbox;
+  CTBMStatic m_Help1, m_Help2, m_Help3, m_Help4;
 
   // Overrides
   // ClassWizard generate virtual function overrides
   //{{AFX_VIRTUAL(COptionsPasswordHistory)
-  virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
+  virtual void DoDataExchange(CDataExchange *pDX);    // DDX/DDV support
   virtual BOOL OnInitDialog();
-  BOOL PreTranslateMessage(MSG* pMsg);
+  virtual BOOL PreTranslateMessage(MSG *pMsg);
   virtual BOOL OnApply();
   virtual BOOL OnKillActive();
   //}}AFX_VIRTUAL

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -86,7 +86,6 @@ struct PWPolicy {
   }
 
   bool operator==(const PWPolicy &that) const;
-
   bool operator!=(const PWPolicy &that) const
   {return !(*this == that);}
 
@@ -113,39 +112,39 @@ struct PWPolicy {
 //-----------------------------------------------------------------
 // Structure for maintaining history of policy changes for Undo/Redo
 
-// Change flags
-enum  CPP_FLAGS {CPP_INVALID = 0, CPP_ADD = 1, CPP_DELETE = 2, CPP_MODIFIED = 4};
-
 struct st_PSWDPolicyChange {
+  // Change mode
+  enum class Mode {INVALID, ADD, REMOVE, MODIFIED};
+
   StringX name;
   PWPolicy st_pp_save;
   PWPolicy st_pp_new;
-  CPP_FLAGS flags;
+  Mode mode;
 
   st_PSWDPolicyChange()
-  : name(_T("")), flags(CPP_INVALID)
+  : name(_T("")), mode(Mode::INVALID)
   {
     st_pp_save.Empty();
     st_pp_new.Empty();
   }
 
-  st_PSWDPolicyChange(const StringX &in_name, CPP_FLAGS in_flags,
+  st_PSWDPolicyChange(const StringX &in_name, Mode in_mode,
           const PWPolicy &in_st_pp_original,
           const PWPolicy &in_st_pp_new)
   : name(in_name), st_pp_save(in_st_pp_original),
-  st_pp_new(in_st_pp_new), flags(in_flags)
+  st_pp_new(in_st_pp_new), mode(in_mode)
   {}
 
   st_PSWDPolicyChange(const st_PSWDPolicyChange &that)
     : name(that.name), st_pp_save(that.st_pp_save),
-    st_pp_new(that.st_pp_new), flags(that.flags)
+    st_pp_new(that.st_pp_new), mode(that.mode)
   {}
 
   st_PSWDPolicyChange &operator=(const st_PSWDPolicyChange &that)
   {
     if (this != &that) {
       name = that.name;
-      flags = that.flags;
+      mode = that.mode;
       st_pp_save = that.st_pp_save;
       st_pp_new = that.st_pp_new;
     }
@@ -169,7 +168,7 @@ struct st_PSWDPolicyChange {
   void Empty()
   { 
     name = _T("");
-    flags = CPP_INVALID;
+    mode = Mode::INVALID;
     st_pp_save.Empty();
     st_pp_new.Empty();
   }

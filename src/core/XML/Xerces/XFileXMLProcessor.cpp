@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -132,10 +132,10 @@ bool XFileXMLProcessor::Process(const bool &bvalidation, const stringT &Imported
   pSAX2Parser->setContentHandler(pSAX2Handler);
   pSAX2Parser->setErrorHandler(pSAX2Handler);
 
-  pSAX2Handler->SetVariables(m_bValidation ? NULL : m_pXMLcore, m_bValidation,
+  pSAX2Handler->SetVariables(m_bValidation ? nullptr : m_pXMLcore, m_bValidation,
                              ImportedPrefix, m_delimiter, bImportPSWDsOnly,
-                             m_bValidation ? NULL : m_pPossible_Aliases,
-                             m_bValidation ? NULL : m_pPossible_Shortcuts,
+                             m_bValidation ? nullptr : m_pPossible_Aliases,
+                             m_bValidation ? nullptr : m_pPossible_Shortcuts,
                              m_pmulticmds, m_prpt);
   if (!m_bValidation) {
     b_into_empty = m_pXMLcore->GetNumEntries() == 0;
@@ -173,7 +173,7 @@ bool XFileXMLProcessor::Process(const bool &bvalidation, const stringT &Imported
     } else {
       pSAX2Handler->AddXMLEntries();
 
-      // Get numbers (may have been modified by AddXMLEntries
+      // Get numbers (may have been modified by AddXMLEntries)
       m_numEntriesImported = pSAX2Handler->getNumEntries();
       m_numEntriesSkipped = pSAX2Handler->getNumSkipped();
       m_numEntriesRenamed = pSAX2Handler->getNumRenamed();
@@ -181,13 +181,13 @@ bool XFileXMLProcessor::Process(const bool &bvalidation, const stringT &Imported
       m_numNoPolicies = pSAX2Handler->getNumNoPolicies();
       m_numRenamedPolicies = pSAX2Handler->getNumRenamedPolicies();
       m_numShortcutsRemoved = pSAX2Handler->getNumShortcutsRemoved();
+      m_numEmptyGroupsImported = pSAX2Handler->getNumEmptyGroupsImported();
 
       // Get lists
       m_strXMLErrors = pSAX2Handler->getXMLErrors();
       m_strSkippedList = pSAX2Handler->getSkippedList();
       m_strPWHErrorList = pSAX2Handler->getPWHErrorList();
       m_strRenameList = pSAX2Handler->getRenameList();
-
 
       if (b_into_empty) {
         pSAX2Handler->AddDBPreferences();

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -38,7 +38,7 @@ bool CRUEList::GetAllMenuItemStrings(vector<RUEntryData> &ListofAllMenuStrings) 
     ItemListConstIter pw_listpos = m_core.Find(*iter);
     if (pw_listpos == m_core.GetEntryEndIter()) {
       ruentrydata.string = L"";
-      ruentrydata.pci = NULL;
+      ruentrydata.pci = nullptr;
     } else {
       const CItemData &ci = m_core.GetEntry(pw_listpos);
       StringX group = ci.GetGroup();
@@ -111,7 +111,8 @@ bool CRUEList::DeleteRUEntry(const pws_os::CUUID &RUEuuid)
   return true;
 }
 
-bool CRUEList::GetPWEntry(size_t index, CItemData &ci){
+bool CRUEList::GetPWEntry(size_t index, CItemData &ci) const
+{
   if ((m_maxentries == 0) || m_RUEList.empty() ||
      (index > (m_maxentries - 1)) ||
      (index > (m_RUEList.size() - 1)))
@@ -122,7 +123,10 @@ bool CRUEList::GetPWEntry(size_t index, CItemData &ci){
   ItemListConstIter pw_listpos = m_core.Find(re_FoundEntry);
   if (pw_listpos == m_core.GetEntryEndIter()) {
     // Entry does not exist anymore!
-    m_RUEList.erase(m_RUEList.begin() + index);
+    // We break constness here since this is "housekeeping", and
+    // doesn't affect the object's semantics
+    RUEList::iterator iter = const_cast<CRUEList *>(this)->m_RUEList.begin() + index;
+    const_cast<CRUEList *>(this)->m_RUEList.erase(iter);
     return false;
   } else { // valid pw_listpos
     ci = m_core.GetEntry(pw_listpos);
@@ -145,15 +149,6 @@ void CRUEList::SetRUEList(const UUIDList &RUElist)
   std::copy(RUElist.rbegin(), RUElist.rend(), m_RUEList.begin());
   if (m_RUEList.size() > m_maxentries)
     m_RUEList.resize(m_maxentries);
-}
-
-CRUEList& CRUEList::operator=(const CRUEList &that)
-{
-  if (this != &that) {
-    m_maxentries = that.m_maxentries;
-    m_RUEList = that.m_RUEList;
-  }
-  return *this;
 }
 
 //-----------------------------------------------------------------------------

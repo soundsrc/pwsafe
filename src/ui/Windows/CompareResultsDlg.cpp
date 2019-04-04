@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -15,6 +15,7 @@
 #include "DboxMain.h"
 #include "CompareResultsDlg.h"
 #include "ShowCompareDlg.h"
+#include "Fonts.h"
 
 #include "core/core.h"
 #include "core/PWScore.h"
@@ -72,15 +73,17 @@ CCompareResultsDlg::CCompareResultsDlg(CWnd* pParent,
                                        CompareData &Conflicts, CompareData &Identical,
                                        CItemData::FieldBits &bsFields,
                                        PWScore *pcore0, PWScore *pcore1,
+                                       CString &csProtect, CString &csAttachment,
                                        CReport *pRpt)
   : CPWResizeDialog(CCompareResultsDlg::IDD, pParent),
   m_OnlyInCurrent(OnlyInCurrent), m_OnlyInComp(OnlyInComp),
   m_Conflicts(Conflicts), m_Identical(Identical),
   m_bsFields(bsFields), m_pcore0(pcore0), m_pcore1(pcore1),
   m_pRpt(pRpt), m_bSortAscending(true), m_iSortedColumn(0),
-  m_OriginalDBChanged(false), m_ComparisonDBChanged(false),
+  m_OriginalDBChanged(false),
   m_bTreatWhiteSpaceasEmpty(false),
-  m_ShowIdenticalEntries(BST_UNCHECKED)
+  m_ShowIdenticalEntries(BST_UNCHECKED),
+  m_csProtect(csProtect), m_csAttachment(csAttachment)
 {
 }
 
@@ -110,13 +113,16 @@ void CCompareResultsDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CCompareResultsDlg, CPWResizeDialog)
   ON_WM_SIZE()
   ON_WM_INITMENUPOPUP()
+  
   ON_BN_CLICKED(ID_HELP, OnHelp)
   ON_BN_CLICKED(IDOK, OnOK)
   ON_BN_CLICKED(IDC_SHOW_IDENTICAL_ENTRIES, OnShowIdenticalEntries)
+  
   ON_NOTIFY(NM_RCLICK, IDC_RESULTLIST, OnItemRightClick)
   ON_NOTIFY(NM_DBLCLK, IDC_RESULTLIST, OnItemDoubleClick)
   ON_NOTIFY(LVN_ITEMCHANGING, IDC_RESULTLIST, OnItemChanging)
   ON_NOTIFY(HDN_ITEMCLICK, IDC_RESULTLISTHDR, OnColumnClick)
+  
   ON_COMMAND(ID_MENUITEM_COMPVIEWEDIT, OnCompareViewEdit)
   ON_COMMAND(ID_MENUITEM_SYNCHRONIZE, OnCompareSynchronize)
   ON_COMMAND(ID_MENUITEM_COPY_TO_ORIGINAL, OnCompareCopyToOriginalDB)
@@ -127,6 +133,11 @@ END_MESSAGE_MAP()
 
 BOOL CCompareResultsDlg::OnInitDialog()
 {
+  // We do not allow Save Immediately for actions performed via the
+  // CompareResults dialog - these include copy, edit, synchronise
+  m_bDBNotificationState = GetMainDlg()->GetDBNotificationState();
+  GetMainDlg()->SuspendOnDBNotification();
+
   std::vector<UINT> vibottombtns;
   vibottombtns.push_back(IDOK);
 
@@ -147,6 +158,8 @@ BOOL CCompareResultsDlg::OnInitDialog()
   DWORD dwExtendedStyle = m_LCResults.GetExtendedStyle();
   dwExtendedStyle |= (LVS_EX_GRIDLINES | LVS_EX_FULLROWSELECT);
   m_LCResults.SetExtendedStyle(dwExtendedStyle);
+  
+  m_LCResults.UpdateRowHeight(false);
 
   CString cs_header;
   int i;
@@ -160,8 +173,7 @@ BOOL CCompareResultsDlg::OnInitDialog()
     if (m_bsFields.test(OptCols[i].ft)) {
       cs_header.LoadString(OptCols[i].ids);
       // Add on the end
-      int icol = m_LCResults.InsertColumn(LAST, cs_header, LVCFMT_CENTER);
-      ASSERT(icol != -1);
+      VERIFY(m_LCResults.InsertColumn(LAST, cs_header, LVCFMT_CENTER) != -1);
     }
   }
 
@@ -214,7 +226,7 @@ BOOL CCompareResultsDlg::OnInitDialog()
 
   WriteReportData();
   UpdateStatusBar();
-  return FALSE;
+  return TRUE;  // return TRUE unless you set the focus to a control
 }
 
 void CCompareResultsDlg::OnInitMenuPopup(CMenu* pPopupMenu, UINT nIndex, BOOL bSysMenu)
@@ -245,10 +257,10 @@ void CCompareResultsDlg::AddCompareEntries(const bool bAddIdentical)
 
       StringX sxTitle = st_data.title;
       if (st_data.bIsProtected0)
-        sxTitle += L" #";
+        sxTitle += m_csProtect;
 
       if (st_data.bHasAttachment0)
-        sxTitle += L" +";
+        sxTitle += m_csAttachment;
       
       m_LCResults.SetItemText(iItem, TITLE, sxTitle.c_str());
 
@@ -275,10 +287,10 @@ void CCompareResultsDlg::AddCompareEntries(const bool bAddIdentical)
       m_LCResults.SetItemText(iItem, GROUP, st_data.group.c_str());
       StringX sxTitle = st_data.title;
       if (st_data.bIsProtected0)
-        sxTitle += L" #";
+        sxTitle += m_csProtect;
 
       if (st_data.bHasAttachment0)
-        sxTitle += L" +";
+        sxTitle += m_csAttachment;
 
       m_LCResults.SetItemText(iItem, TITLE, sxTitle.c_str());
       m_LCResults.SetItemText(iItem, USER, st_data.user.c_str());
@@ -330,10 +342,10 @@ void CCompareResultsDlg::AddCompareEntries(const bool bAddIdentical)
       m_LCResults.SetItemText(iItem, GROUP, st_data.group.c_str());
       StringX sxTitle = st_data.title;
       if (st_data.bIsProtected0)
-        sxTitle += L" #";
+        sxTitle += m_csProtect;
 
       if (st_data.bHasAttachment0)
-        sxTitle += L" +";
+        sxTitle += m_csAttachment;
 
       m_LCResults.SetItemText(iItem, TITLE, sxTitle.c_str());
       m_LCResults.SetItemText(iItem, USER, st_data.user.c_str());
@@ -389,6 +401,10 @@ void CCompareResultsDlg::OnShowIdenticalEntries()
 
 void CCompareResultsDlg::OnCancel()
 {
+  // Reset Save Immediately if set originally
+  if (m_bDBNotificationState)
+    GetMainDlg()->ResumeOnDBNotification();
+
   m_menuManager.Cleanup();
 
   CPWResizeDialog::OnCancel();
@@ -396,6 +412,10 @@ void CCompareResultsDlg::OnCancel()
 
 void CCompareResultsDlg::OnOK()
 {
+  // Reset Save Immediately if set originally
+  if (m_bDBNotificationState)
+    GetMainDlg()->ResumeOnDBNotification();
+
   m_menuManager.Cleanup();
 
   CPWResizeDialog::OnOK();
@@ -410,9 +430,9 @@ void CCompareResultsDlg::UpdateStatusBar()
 {
   m_results.Format(IDS_COMPARERESULTS, m_numOnlyInCurrent, m_numOnlyInComp,
                                        m_numConflicts, m_numIdentical);
-  m_statusBar.SetPaneText(0, m_results, TRUE);
-  m_statusBar.SetPaneInfo(0, m_statusBar.GetItemID(0), SBPS_STRETCH, NULL);
-  m_statusBar.UpdateWindow();
+  m_RSDStatusBar.SetPaneText(0, m_results, TRUE);
+  m_RSDStatusBar.SetPaneInfo(0, m_RSDStatusBar.GetItemID(0), SBPS_STRETCH, NULL);
+  m_RSDStatusBar.UpdateWindow();
 }
 
 LRESULT CCompareResultsDlg::ProcessAllFunction(const int ifunction,
@@ -456,7 +476,10 @@ LRESULT CCompareResultsDlg::ProcessAllFunction(const int ifunction,
           user = pos->second.GetUser();
           cs_tmp.LoadString(IDS_ORIGINALDB);
           buffer.Format(ifunction == SYNCHALL ? IDS_SYNCENTRY : IDS_COPYENTRY,
-                        cs_tmp, group, title, user);
+                        static_cast<LPCWSTR>(cs_tmp),
+                        static_cast<LPCWSTR>(group),
+                        static_cast<LPCWSTR>(title),
+                        static_cast<LPCWSTR>(user));
           m_pRpt->WriteLine((LPCWSTR)buffer);
           break;
         case EDIT:
@@ -515,7 +538,10 @@ bool CCompareResultsDlg::ProcessFunction(const int ifunction,
           user = pos->second.GetUser();
           cs_tmp.LoadString(IDS_ORIGINALDB);
           buffer.Format(ifunction == SYNCH ? IDS_SYNCENTRY : IDS_COPYENTRY,
-                        cs_tmp, group, title, user);
+                        static_cast<LPCWSTR>(cs_tmp),
+                        static_cast<LPCWSTR>(group),
+                        static_cast<LPCWSTR>(title),
+                        static_cast<LPCWSTR>(user));
           m_pRpt->WriteLine((LPCWSTR)buffer);
           break;
         case EDIT:
@@ -634,7 +660,8 @@ void CCompareResultsDlg::OnCompareCopyToOriginalDB()
   const CString cs_originaldb(MAKEINTRESOURCE(IDS_ORIGINALDB));
   const CString cs_comparisondb(MAKEINTRESOURCE(IDS_COMPARISONDB));
 
-  cs_msg.Format(IDS_COPYLEFTRIGHT, cs_comparisondb, cs_originaldb);
+  cs_msg.Format(IDS_COPYLEFTRIGHT, static_cast<LPCWSTR>(cs_comparisondb),
+                static_cast<LPCWSTR>(cs_originaldb));
   ifunction = COPY_TO_ORIGINALDB;
 
   if (cs_text.Right(1) == L"*")
@@ -759,7 +786,8 @@ void CCompareResultsDlg::DoAllFunctions(const int ifunction)
   const CString cs_comparisondb(MAKEINTRESOURCE(IDS_COMPARISONDB));
 
   cs_msg.Format(ifunction == COPYALL_TO_ORIGINALDB ? IDS_COPYALL : IDS_SYNCHRONIZEALL,
-                cs_comparisondb, cs_originaldb);
+                static_cast<LPCWSTR>(cs_comparisondb),
+                static_cast<LPCWSTR>(cs_originaldb));
 
   // Check if any records have unknown fields
   POSITION pos = m_LCResults.GetFirstSelectedItemPosition();
@@ -931,8 +959,7 @@ void CCompareResultsDlg::OnItemRightClick(NMHDR *pNMHDR, LRESULT *pLResult)
       minfo.cbSize = sizeof(MENUINFO);
       minfo.fMask = MIM_MENUDATA;
       minfo.dwMenuData = ipopup;
-      BOOL brc = menu.SetMenuInfo(&minfo);
-      ASSERT(brc != 0);
+      VERIFY(menu.SetMenuInfo(&minfo));
 
       CMenu *pPopup = menu.GetSubMenu(0);
       ASSERT(pPopup != NULL);
@@ -986,8 +1013,7 @@ void CCompareResultsDlg::OnItemRightClick(NMHDR *pNMHDR, LRESULT *pLResult)
     minfo.cbSize = sizeof(MENUINFO);
     minfo.fMask = MIM_MENUDATA;
     minfo.dwMenuData = ipopup;
-    BOOL brc = menu.SetMenuInfo(&minfo);
-    ASSERT(brc != 0);
+    VERIFY(menu.SetMenuInfo(&minfo));
 
     CMenu *pPopup = menu.GetSubMenu(0);
     ASSERT(pPopup != NULL);
@@ -1120,11 +1146,6 @@ void CCompareResultsDlg::OnColumnClick(NMHDR *pNotifyStruct, LRESULT *pLResult)
     pst_data->listindex = i;
   }
 
-#if (WINVER < 0x0501)  // These are already defined for WinXP and later
-#define HDF_SORTUP   0x0400
-#define HDF_SORTDOWN 0x0200
-#endif
-
   HDITEM hdi;
   hdi.mask = HDI_FORMAT;
 
@@ -1176,7 +1197,7 @@ void CCompareResultsDlg::WriteReportData()
   CString buffer;
 
   if (!m_OnlyInCurrent.empty()) {
-    buffer.Format(IDS_COMPAREENTRIES1, m_scFilename1);
+    buffer.Format(IDS_COMPAREENTRIES1, static_cast<LPCWSTR>(m_scFilename1));
     m_pRpt->WriteLine((LPCWSTR)buffer);
     for (cd_iter = m_OnlyInCurrent.begin(); cd_iter != m_OnlyInCurrent.end();
          cd_iter++) {
@@ -1189,7 +1210,7 @@ void CCompareResultsDlg::WriteReportData()
   }
 
   if (!m_OnlyInComp.empty()) {
-    buffer.Format(IDS_COMPAREENTRIES2, m_scFilename2);
+    buffer.Format(IDS_COMPAREENTRIES2, static_cast<LPCWSTR>(m_scFilename2));
     m_pRpt->WriteLine((LPCWSTR)buffer);
     for (cd_iter = m_OnlyInComp.begin(); cd_iter != m_OnlyInComp.end();
          cd_iter++) {
@@ -1421,22 +1442,24 @@ bool CCompareResultsDlg::CompareEntries(st_CompareData *pst_data)
 
 // Compare CListCtrl
 
-CCPListCtrl::CCPListCtrl()
+CCPListCtrlX::CCPListCtrlX()
   : m_row(-1), m_column(-1)
 {
 }
 
-CCPListCtrl::~CCPListCtrl()
+CCPListCtrlX::~CCPListCtrlX()
 {
 }
 
-BEGIN_MESSAGE_MAP(CCPListCtrl, CListCtrl)
-  //{{AFX_MSG_MAP(CCPListCtrl)
+BEGIN_MESSAGE_MAP(CCPListCtrlX, CListCtrl)
+  //{{AFX_MSG_MAP(CCPListCtrlX)
+  ON_WM_MEASUREITEM_REFLECT()
+  
   ON_NOTIFY_REFLECT(NM_CUSTOMDRAW, OnCustomDraw)
   //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
-BOOL CCPListCtrl::PreTranslateMessage(MSG *pMsg)
+BOOL CCPListCtrlX::PreTranslateMessage(MSG *pMsg)
 {
   if (pMsg->message == WM_LBUTTONDOWN) {
     // Get cell position for CustomDraw
@@ -1460,9 +1483,23 @@ BOOL CCPListCtrl::PreTranslateMessage(MSG *pMsg)
     }
   }
   return CListCtrl::PreTranslateMessage(pMsg);
-} 
+}
 
-bool CCPListCtrl::IsSelected(DWORD_PTR iRow)
+void CCPListCtrlX::MeasureItem(LPMEASUREITEMSTRUCT lpMeasureItemStruct)
+{
+  if (!Fonts::GetInstance())
+    return;
+
+  int padding = 4;
+  if (GetExtendedStyle() & LVS_EX_GRIDLINES)
+    padding += 2;
+
+  lpMeasureItemStruct->itemHeight = Fonts::GetInstance()->CalcHeight() + padding;
+  //Remove LVS_OWNERDRAWFIXED style to apply default DrawItem
+  ModifyStyle(LVS_OWNERDRAWFIXED, 0);
+}
+
+bool CCPListCtrlX::IsSelected(DWORD_PTR iRow)
 {
   POSITION pos = GetFirstSelectedItemPosition();
 
@@ -1474,22 +1511,30 @@ bool CCPListCtrl::IsSelected(DWORD_PTR iRow)
   return false;
 }
 
-void CCPListCtrl::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *pLResult)
+void CCPListCtrlX::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *pLResult)
 {
-  NMLVCUSTOMDRAW *pLVCD = (NMLVCUSTOMDRAW *)pNotifyStruct;
+  NMLVCUSTOMDRAW *pLVCD = reinterpret_cast<NMLVCUSTOMDRAW *>(pNotifyStruct);
 
   *pLResult = CDRF_DODEFAULT;
 
   static COLORREF crWindowText, cfNormalTextBkgrd, crSelectedText, crSelectedBkgrd;
   bool bIsSelected = IsSelected(pLVCD->nmcd.dwItemSpec);
-  
+
+  static bool bchanged_subitem_font(false);
+  static CDC *pDC = NULL;
+  static CFont *pAddEditFont = NULL;
+
   switch (pLVCD->nmcd.dwDrawStage) {
     case CDDS_PREPAINT:
       // PrePaint
+      bchanged_subitem_font = false;
       crWindowText = GetTextColor();
       cfNormalTextBkgrd = GetTextBkColor();
       crSelectedText = ::GetSysColor(COLOR_HIGHLIGHTTEXT);
       crSelectedBkgrd = ::GetSysColor(COLOR_HIGHLIGHT);
+      
+      pDC = CDC::FromHandle(pLVCD->nmcd.hdc);
+      pAddEditFont = Fonts::GetInstance()->GetAddEditFont();
       *pLResult = CDRF_NOTIFYITEMDRAW;
       break;
 
@@ -1499,9 +1544,10 @@ void CCPListCtrl::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *pLResult)
         pLVCD->clrText = crWindowText;
         pLVCD->clrTextBk = cfNormalTextBkgrd;
         pLVCD->nmcd.uItemState &= ~CDIS_SELECTED;
-        *pLResult |= CDRF_NEWFONT;
       }
-      *pLResult |= CDRF_NOTIFYSUBITEMDRAW;
+      pDC->SelectObject(pAddEditFont);
+      bchanged_subitem_font = true;
+      *pLResult |= (CDRF_NOTIFYSUBITEMDRAW | CDRF_NEWFONT);
       break;
 
     case CDDS_ITEMPREPAINT | CDDS_SUBITEM:
@@ -1518,6 +1564,15 @@ void CCPListCtrl::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *pLResult)
       *pLResult |= (CDRF_NOTIFYPOSTPAINT | CDRF_NEWFONT);
       break;
 
+    case CDDS_ITEMPOSTPAINT | CDDS_SUBITEM:
+      // Sub-item PostPaint - restore old font if any
+      if (bchanged_subitem_font) {
+        bchanged_subitem_font = false;
+        pDC->SelectObject(pAddEditFont);
+        *pLResult |= CDRF_NEWFONT;
+      }
+      break;
+
     /*
     case CDDS_PREERASE:
     case CDDS_POSTERASE:
@@ -1529,5 +1584,28 @@ void CCPListCtrl::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *pLResult)
     */
     default:
       break;
+  }
+}
+
+void CCPListCtrlX::UpdateRowHeight(bool bInvalidate) {
+  // We need to change WINDOWPOS to trigger MeasureItem 
+  // http://www.codeproject.com/Articles/1401/Changing-Row-Height-in-an-owner-drawn-Control
+  CRect rc;
+  GetWindowRect(&rc);
+  WINDOWPOS wp;
+  wp.hwnd = m_hWnd;
+  wp.cx = rc.Width();
+  wp.cy = rc.Height();
+  wp.flags = SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOOWNERZORDER | SWP_NOZORDER;
+
+  //Add LVS_OWNERDRAWFIXED style for generating MeasureItem event
+  ModifyStyle(0, LVS_OWNERDRAWFIXED);
+
+  SendMessage(WM_WINDOWPOSCHANGED, 0, (LPARAM)&wp);
+  if (bInvalidate) {
+    Invalidate();
+    int idx = GetTopIndex();
+    if (idx >= 0)
+      EnsureVisible(idx, FALSE);
   }
 }

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -391,7 +391,6 @@ typedef unsigned long ulong32;
 #define BSWAP(x)  ( ((x>>24)&0x000000FFUL) | ((x<<24)&0xFF000000UL)  | \
   ((x>>8)&0x0000FF00UL)  | ((x<<8)&0x00FF0000UL) )
 
-
 /* 32-bit Rotates */
 #if defined(_MSC_VER)
 
@@ -455,7 +454,6 @@ static inline unsigned RORc(unsigned word, const int i)
 #define RORc(x, y) ( (((static_cast<unsigned long>(x)&0xFFFFFFFFUL)>>static_cast<unsigned long>((y)&31)) | (static_cast<unsigned long>(x)<<static_cast<unsigned long>(32-((y)&31)))) & 0xFFFFFFFFUL)
 
 #endif
-
 
 /* 64-bit Rotates */
 #if defined(__GNUC__) && defined(__x86_64__) && !defined(LTC_NO_ASM)

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -17,20 +17,20 @@
 #define LTC_CLEAN_STACK
 #define TWOFISH_ALL_TABLES
 
-enum {
-  CRYPT_OK = 0,           /* Result OK */
-  CRYPT_ERROR,            /* Generic Error */
-  CRYPT_NOP,              /* Not a failure but no operation was performed */
+enum class CryptStatus {
+  OK = 0,           /* Result OK */
+  GENERIC_ERROR,    /* Generic Error */
+  NOP,              /* Not a failure but no operation was performed */
 
-  CRYPT_INVALID_KEYSIZE,  /* Invalid key size given */
-  CRYPT_INVALID_ROUNDS,   /* Invalid number of rounds */
-  CRYPT_FAIL_TESTVECTOR,  /* Algorithm failed test vectors */
+  INVALID_KEYSIZE,  /* Invalid key size given */
+  INVALID_ROUNDS,   /* Invalid number of rounds */
+  FAIL_TESTVECTOR,  /* Algorithm failed test vectors */
 
-  CRYPT_BUFFER_OVERFLOW,  /* Not enough space for output */
+  BUFFER_OVERFLOW,  /* Not enough space for output */
 
-  CRYPT_MEM,              /* Out of memory */
+  MEM,              /* Out of memory */
 
-  CRYPT_INVALID_ARG      /* Generic invalid argument */
+  INVALID_ARG      /* Generic invalid argument */
 };
 
 /** 
@@ -217,7 +217,7 @@ static uint32 mds_column_mult(unsigned char in, int col)
 /* Computes [y0 y1 y2 y3] = MDS . [x0 x1 x2 x3] */
 static void mds_mult(const unsigned char *in, unsigned char *out)
 {
-  int x;
+  unsigned int x;
   uint32 tmp;
   for (tmp = x = 0; x < 4; x++) {
     tmp ^= mds_column_mult(in[x], x);
@@ -348,12 +348,12 @@ static uint32 g_func(uint32 x, const twofish_key *key)
   @param keylen The key length in bytes
   @param num_rounds The number of rounds desired (0 for default)
   @param skey The key in as scheduled by this function.
-  @return CRYPT_OK if successful
+  @return CryptStatus::OK if successful
 */
 #ifdef LTC_CLEAN_STACK
-static int _twofish_setup(const unsigned char *key, int keylen, int num_rounds, twofish_key *skey)
+static CryptStatus _twofish_setup(const unsigned char *key, int keylen, int num_rounds, twofish_key *skey)
 #else
-static int twofish_setup(const unsigned char *key, int keylen, int num_rounds, twofish_key *skey)
+static CryptStatus twofish_setup(const unsigned char *key, int keylen, int num_rounds, twofish_key *skey)
 #endif
 {
 #ifndef TWOFISH_SMALL
@@ -363,16 +363,16 @@ static int twofish_setup(const unsigned char *key, int keylen, int num_rounds, t
   unsigned char tmp[4], tmp2[4], M[8*4];
   uint32 A, B;
 
-  ASSERT(key  != NULL);
-  ASSERT(skey != NULL);
+  ASSERT(key  != nullptr);
+  ASSERT(skey != nullptr);
 
   /* invalid arguments? */
   if (num_rounds != 16 && num_rounds != 0) {
-    return CRYPT_INVALID_ROUNDS;
+    return CryptStatus::INVALID_ROUNDS;
   }
 
   if (keylen != 16 && keylen != 24 && keylen != 32) {
-    return CRYPT_INVALID_KEYSIZE;
+    return CryptStatus::INVALID_KEYSIZE;
   }
 
   /* k = keysize/64 [but since our keysize is in bytes...] */
@@ -457,14 +457,13 @@ static int twofish_setup(const unsigned char *key, int keylen, int num_rounds, t
     default: skey->start = 2; break;
   }
 #endif
-  return CRYPT_OK;
+  return CryptStatus::OK;
 }
 
 #ifdef LTC_CLEAN_STACK
-int twofish_setup(const unsigned char *key, int keylen, int num_rounds, twofish_key *skey)
+CryptStatus twofish_setup(const unsigned char *key, int keylen, int num_rounds, twofish_key *skey)
 {
-  int x;
-  x = _twofish_setup(key, keylen, num_rounds, skey);
+  CryptStatus x = _twofish_setup(key, keylen, num_rounds, skey);
   burnStack(sizeof(int32) * 7 + sizeof(unsigned char) * 56 + sizeof(uint32) * 2);
   return x;
 }
@@ -489,9 +488,9 @@ static void twofish_ecb_encrypt(const unsigned char *pt, unsigned char *ct, cons
   const uint32 *S1, *S2, *S3, *S4;
 #endif    
 
-  ASSERT(pt   != NULL);
-  ASSERT(ct   != NULL);
-  ASSERT(skey != NULL);
+  ASSERT(pt   != nullptr);
+  ASSERT(ct   != nullptr);
+  ASSERT(skey != nullptr);
 
 #if !defined(TWOFISH_SMALL) && !defined(__GNUC__)
   S1 = skey->S[0];
@@ -559,9 +558,9 @@ static void twofish_ecb_decrypt(const unsigned char *ct, unsigned char *pt, cons
   const uint32 *S1, *S2, *S3, *S4;
 #endif    
 
-  ASSERT(pt   != NULL);
-  ASSERT(ct   != NULL);
-  ASSERT(skey != NULL);
+  ASSERT(pt   != nullptr);
+  ASSERT(ct   != nullptr);
+  ASSERT(skey != nullptr);
 
 #if !defined(TWOFISH_SMALL) && !defined(__GNUC__)
   S1 = skey->S[0];
@@ -615,10 +614,10 @@ static void twofish_ecb_decrypt(const unsigned char *ct, unsigned char *pt, cons
 
 TwoFish::TwoFish(const unsigned char* key, int keylen)
 {
-  int status = twofish_setup(key, keylen, 0, &key_schedule);
+  CryptStatus status = twofish_setup(key, keylen, 0, &key_schedule);
 
-  ASSERT(status == CRYPT_OK);
-  if (status != CRYPT_OK)
+  ASSERT(status == CryptStatus::OK);
+  if (status != CryptStatus::OK)
     throw status;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -81,7 +81,7 @@ FieldSelectionPanel::FieldSelectionPanel(wxWindow* parent): wxPanel(parent),
   //second row is the listboxes, with buttons in between
 
   m_lbAvailable = new wxListBox(this, ID_LB_AVAILABLE_FIELDS, wxDefaultPosition,
-                                         wxDefaultSize, 0, NULL, wxLB_EXTENDED);
+                                         wxDefaultSize, 0, nullptr, wxLB_EXTENDED);
   grid->Add(m_lbAvailable, wxSizerFlags().Expand());
 
   wxBoxSizer* buttonBox = new wxBoxSizer(wxVERTICAL);
@@ -98,7 +98,7 @@ FieldSelectionPanel::FieldSelectionPanel(wxWindow* parent): wxPanel(parent),
   grid->Add(buttonBox, wxSizerFlags().Align(wxALIGN_CENTER_VERTICAL));
 
   m_lbSelected = new wxListBox(this, ID_LB_SELECTED_FIELDS, wxDefaultPosition,
-                                        wxDefaultSize, 0, NULL, wxLB_EXTENDED);
+                                        wxDefaultSize, 0, nullptr, wxLB_EXTENDED);
   grid->Add(m_lbSelected, wxSizerFlags().Expand());
 
   SetSizer(grid);
@@ -229,7 +229,6 @@ void FieldSelectionPanel::OnRemoveAll( wxCommandEvent& /* evt */ )
       ++idx;
   }
 }
-
 
 ///////////////////////////////////////////////////////////////////////////
 // FieldSelectionPanelValidator

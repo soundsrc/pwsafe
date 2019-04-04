@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -16,14 +16,14 @@
 class BlowFish : public Fish
 {
 public:
-  static BlowFish *MakeBlowFish(const unsigned char *pass, int passlen,
-                                const unsigned char *salt, int saltlen);
+  static BlowFish *MakeBlowFish(const unsigned char *pass, unsigned int passlen,
+                                const unsigned char *salt, unsigned int saltlen);
 // Simple version for protecting ItemFields in memory:
   static BlowFish *MakeBlowFish(const unsigned char *key, int keylen) {
     return new BlowFish(key, keylen);
   }
 
-  enum {BLOCKSIZE = 8};
+  static const unsigned int  BLOCKSIZE = 8;
 
   BlowFish(const unsigned char* key, int keylen);
   ~BlowFish();
@@ -36,7 +36,7 @@ public:
   unsigned int GetBlockSize() const {return BLOCKSIZE;}
 
 private:
-  enum {bf_N = 16};
+  static const unsigned int bf_N = 16;
   uint32 bf_S[4][256];
   uint32 bf_P[bf_N + 2];
   static const uint32 tempbf_S[4][256];

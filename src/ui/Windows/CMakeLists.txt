@@ -9,7 +9,6 @@ list(APPEND PWSAFE_HDR_LIST
             src/ui/Windows/AddEdit_PropertySheet.h
             src/ui/Windows/AdvancedDlg.h
             src/ui/Windows/AdvancedValues.h
-            src/ui/Windows/ChangeAliasPswd.h
             src/ui/Windows/ClearQuestionDlg.h
             src/ui/Windows/ColumnChooserDlg.h
             src/ui/Windows/ColumnChooserLC.h
@@ -55,7 +54,9 @@ list(APPEND PWSAFE_HDR_LIST
             src/ui/Windows/Fonts.h
             src/ui/Windows/FontsDialog.h
             src/ui/Windows/GeneralMsgBox.h
+            src/ui/Windows/GridListCtrl.h
             src/ui/Windows/HKModifiers.h
+            src/ui/Windows/ImgStatic.h
             src/ui/Windows/ImportTextDlg.h
             src/ui/Windows/ImportXMLDlg.h
             src/ui/Windows/InfoDisplay.h
@@ -101,6 +102,7 @@ list(APPEND PWSAFE_HDR_LIST
             src/ui/Windows/PWStatusBar.h
             src/ui/Windows/PWSversion.h
             src/ui/Windows/PWToolBar.h
+            src/ui/Windows/PWTouch.h
             src/ui/Windows/PWTreeCtrl.h
             src/ui/Windows/QuerySetDef.h
             src/ui/Windows/resource.h
@@ -110,6 +112,7 @@ list(APPEND PWSAFE_HDR_LIST
             src/ui/Windows/SampleTextDlg.h
             src/ui/Windows/SCWListCtrl.h
             src/ui/Windows/SecString.h
+            src/ui/Windows/SetDBID.h
             src/ui/Windows/SHCTHotKey.h
             src/ui/Windows/SHCTListCtrl.h
             src/ui/Windows/Shortcut.h
@@ -120,13 +123,16 @@ list(APPEND PWSAFE_HDR_LIST
             src/ui/Windows/Subclass.h
             src/ui/Windows/SysColStatic.h
             src/ui/Windows/SystemTray.h
+            src/ui/Windows/TBMStatic.h
             src/ui/Windows/ThisMfcApp.h
             src/ui/Windows/ViewReport.h
+            src/ui/Windows/ViewAttachmentDlg.h
             src/ui/Windows/VirtualKeyboard/VKBButton.h
             src/ui/Windows/VirtualKeyboard/VKeyBoardDlg.h
             src/ui/Windows/VirtualKeyboard/VKresource.h
             src/ui/Windows/VirtualKeyboard/VKresource3.h
             src/ui/Windows/VirtualKeyboard/VKShiftState.h
+            src/ui/Windows/Windowsdefs.h
             src/ui/Windows/WZAdvanced.h
             src/ui/Windows/WZExecuteThreadParms.h
             src/ui/Windows/WZFinish.h
@@ -146,7 +152,6 @@ list(APPEND PWSAFE_SRC_LIST
             src/ui/Windows/AddEdit_PropertyPage.cpp
             src/ui/Windows/AddEdit_PropertySheet.cpp
             src/ui/Windows/AdvancedDlg.cpp
-            src/ui/Windows/ChangeAliasPswd.cpp
             src/ui/Windows/ClearQuestionDlg.cpp
             src/ui/Windows/ColumnChooserDlg.cpp
             src/ui/Windows/ColumnChooserLC.cpp
@@ -193,6 +198,8 @@ list(APPEND PWSAFE_SRC_LIST
             src/ui/Windows/Fonts.cpp
             src/ui/Windows/FontsDialog.cpp
             src/ui/Windows/GeneralMsgBox.cpp
+            src/ui/Windows/GridListCtrl.cpp
+            src/ui/Windows/ImgStatic.cpp
             src/ui/Windows/ImportTextDlg.cpp
             src/ui/Windows/ImportXMLDlg.cpp
             src/ui/Windows/InfoDisplay.cpp
@@ -250,6 +257,7 @@ list(APPEND PWSAFE_SRC_LIST
             src/ui/Windows/SampleTextDlg.cpp
             src/ui/Windows/SCWListCtrl.cpp
             src/ui/Windows/SecString.cpp
+            src/ui/Windows/SetDBID.cpp
             src/ui/Windows/SHCTHotKey.cpp
             src/ui/Windows/SHCTListCtrl.cpp
             src/ui/Windows/Shortcut.cpp
@@ -260,8 +268,10 @@ list(APPEND PWSAFE_SRC_LIST
             src/ui/Windows/Subclass.cpp
             src/ui/Windows/SysColStatic.cpp
             src/ui/Windows/SystemTray.cpp
+            src/ui/Windows/TBMStatic.cpp
             src/ui/Windows/ThisMfcApp.cpp
             src/ui/Windows/ViewReport.cpp
+            src/ui/Windows/ViewAttachmentDlg.cpp
             src/ui/Windows/VirtualKeyboard/VKBButton.cpp
             src/ui/Windows/VirtualKeyboard/VKeyBoardDlg.cpp
             src/ui/Windows/WZAdvanced.cpp

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -13,7 +13,7 @@
 * A small utility class to handle the clipboard
 * securely. Specifically, we keep a hash
 * of the data that we put on the clipboard, so that
-* ClearData() only clears the clipboard if it has what we put on it, and
+* ClearCPData() only clears the clipboard if it has what we put on it, and
 * if isSensitive was true when we added it.
 */
 
@@ -28,17 +28,15 @@ class PWSclipboard
 public:
   PWSclipboard();
   ~PWSclipboard();
-
+  PWSclipboard(const PWSclipboard &) = delete;
+  PWSclipboard &operator=(const PWSclipboard &)= delete;
   bool SetData(const StringX &data,
     bool isSensitive = true,
     CLIPFORMAT cfFormat = CLIPBOARD_TEXT_FORMAT);
   // returns true if succeeded
-  bool ClearData(); // return true if cleared or if data wasn't ours
+  bool ClearCBData(); // return true if cleared or if data wasn't ours
 
 private:
-  PWSclipboard(const PWSclipboard &); // don't even THINK of implementing this!
-  PWSclipboard &operator=(const PWSclipboard &); // ditto!
-  
   bool m_set;
   unsigned char m_digest[SHA256::HASHLEN];
 };

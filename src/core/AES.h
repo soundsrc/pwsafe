@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2013-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2013-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -23,7 +23,7 @@ struct rijndael_key {
 class AES : public Fish
 {
 public:
-  enum {BLOCKSIZE=16};
+  static const unsigned int BLOCKSIZE = 16;
   AES(const unsigned char* key, int keylen);
   ~AES();
   void Encrypt(const unsigned char *in, unsigned char *out) const;

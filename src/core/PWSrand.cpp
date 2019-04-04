@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -11,13 +11,11 @@
 #include "PwsPlatform.h"
 #include "PWSrand.h"
 
-
-
-PWSrand *PWSrand::self = NULL;
+PWSrand *PWSrand::self = nullptr;
 
 PWSrand *PWSrand::GetInstance()
 {
-  if (self == NULL) {
+  if (self == nullptr) {
     self = new PWSrand;
   }
   return self;
@@ -26,7 +24,7 @@ PWSrand *PWSrand::GetInstance()
 void PWSrand::DeleteInstance()
 {
   delete self;
-  self = NULL;
+  self = nullptr;
 }
 
 PWSrand::PWSrand()
@@ -38,7 +36,7 @@ PWSrand::PWSrand()
   unsigned slen = 0;
   unsigned char *p;
 
-  pws_os::GetRandomSeed(NULL, slen);
+  pws_os::GetRandomSeed(nullptr, slen);
   p = new unsigned char[slen];
   pws_os::GetRandomSeed(p, slen);
   s.Update(p, slen);
@@ -52,7 +50,7 @@ PWSrand::~PWSrand()
 
 void PWSrand::AddEntropy(unsigned char *bytes, unsigned int numBytes)
 {
-  ASSERT(bytes != NULL);
+  ASSERT(bytes != nullptr);
 
   SHA256 s;
 

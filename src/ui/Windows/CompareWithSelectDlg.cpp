@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -23,10 +23,12 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
-CCompareWithSelectDlg::CCompareWithSelectDlg(CItemData *pci, PWScore *pcore,
-      CWnd *pParent)
+CCompareWithSelectDlg::CCompareWithSelectDlg(CWnd *pParent, 
+  CItemData *pci, PWScore *pcore,
+  CString &csProtect, CString &csAttachment)
   : CPWDialog(CCompareWithSelectDlg::IDD, pParent),
-  m_pci(pci), m_pcore(pcore), m_pSelected(NULL), m_pImageList(NULL)
+  m_pci(pci), m_pcore(pcore), m_csProtect(csProtect),
+  m_csAttachment(csAttachment), m_pSelected(NULL), m_pImageList(NULL)
 {
   ASSERT(pci != NULL && m_pcore != NULL);
 
@@ -72,7 +74,7 @@ BOOL CCompareWithSelectDlg::OnInitDialog()
   GetDlgItem(IDC_TITLE)->SetWindowText(m_title);
   GetDlgItem(IDC_USERNAME)->SetWindowText(m_username);
 
- // Init stuff for tree view
+  // Init stuff for tree view
   CBitmap bitmap;
   BITMAP bm;
 
@@ -84,10 +86,9 @@ BOOL CCompareWithSelectDlg::OnInitDialog()
 
   m_pImageList = new CImageList();
 
-  BOOL status = m_pImageList->Create(bm.bmWidth, bm.bmHeight,
-                                     ILC_MASK | ILC_COLORDDB,
-                                     CCWTreeCtrl::NUM_IMAGES, 0);
-  ASSERT(status != 0);
+  VERIFY(m_pImageList->Create(bm.bmWidth, bm.bmHeight,
+                              ILC_MASK | ILC_COLORDDB,
+                              CCWTreeCtrl::NUM_IMAGES, 0) != 0);
 
   // Order of LoadBitmap() calls matches CCWTreeCtrl public enum
   //bitmap.LoadBitmap(IDB_GROUP); - already loaded above to get width
@@ -125,7 +126,8 @@ BOOL CCompareWithSelectDlg::OnInitDialog()
   
   // Disable OK button until an entry is selected
   GetDlgItem(IDOK)->EnableWindow(FALSE);
-  return TRUE;
+  
+  return TRUE;  // return TRUE unless you set the focus to a control
 }
 
 void CCompareWithSelectDlg::OnItemDblClick(NMHDR *pNotifyStruct, LRESULT *pLResult)
@@ -208,7 +210,7 @@ void CCompareWithSelectDlg::OnItemSelected(NMHDR *pNotifyStruct, LRESULT *pLResu
   if (m_pSelected->GetGroup() == m_group && m_pSelected->GetTitle() == m_title &&
       m_pSelected->GetUser() == m_username) {
     // Unselect it
-    m_cwItemTree.SetItemState(hItem, 0, LVIS_SELECTED);
+    m_cwItemTree.SetItemState(hItem, 0, TVIS_SELECTED);
 
     m_pSelected = NULL;
     GetDlgItem(IDOK)->EnableWindow(FALSE);
@@ -220,7 +222,9 @@ void CCompareWithSelectDlg::OnItemSelected(NMHDR *pNotifyStruct, LRESULT *pLResu
 void CCompareWithSelectDlg::InsertItemIntoGUITree(CItemData &ci)
 {
   HTREEITEM ti;
-  StringX treeDispString = (LPCWSTR)m_cwItemTree.MakeTreeDisplayString(ci);
+  StringX treeDispString = (LPCWSTR)m_cwItemTree.MakeTreeDisplayString(ci,
+                                m_csProtect, m_csAttachment);
+
   // get path, create if necessary, add title as last node
   ti = m_cwItemTree.AddGroup(ci.GetGroup().c_str());
   ti = m_cwItemTree.InsertItem(treeDispString.c_str(), ti, TVI_SORT);

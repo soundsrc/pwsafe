@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -41,7 +41,8 @@ extern int s_cfgLockCount;
 struct st_prefShortcut {
   unsigned int id;
   unsigned short int siVirtKey;
-  unsigned char cModifier;
+  unsigned char cPWSModifier;
+  stringT Menu_Name;
 };
 
 // Bool preferences unknown to this version
@@ -95,7 +96,7 @@ public:
 
   enum BoolPrefs {AlwaysOnTop, ShowPWDefault,
     ShowPasswordInTree,
-    SortAscending,
+    SortAscending, // Obsoleted in 3.40 as moved to application config file
     UseDefaultUser, SaveImmediately, PWUseLowercase, PWUseUppercase,
     PWUseDigits, PWUseSymbols, PWUseHexDigits, PWUseEasyVision,
     DontAskQuestion, DeleteQuestion, DCShowsPassword,
@@ -125,6 +126,8 @@ public:
     UseAltAutoType,  // Only under X-Windows
     IgnoreHelpLoadError, // Only under WX
     VKPlaySound, // Windows only
+    ListSortAscending,
+    EnableWindowTransparency,
     NumBoolPrefs};
 
   enum IntPrefs {Column1Width, Column2Width, Column3Width, Column4Width,
@@ -136,6 +139,8 @@ public:
     OptShortcutColumnWidth, ShiftDoubleClickAction, DefaultAutotypeDelay,
     DlgOrientation, TimedTaskChainDelay,
     AutotypeSelectAllKeyCode, AutotypeSelectAllModMask, //X only
+    TreeFontPtSz, PasswordFontPtSz, NotesFontPtSz, AddEditFontPtSz, VKFontPtSz,
+    WindowTransparency, DefaultExpiryDays,
     NumIntPrefs};
 
   enum StringPrefs {CurrentBackup, CurrentFile, LastView, DefaultUsername,
@@ -144,6 +149,7 @@ public:
     MainToolBarButtons, PasswordFont, TreeListSampleText, PswdSampleText,
     LastUsedKeyboard, VKeyboardFontName, VKSampleText, AltNotesEditor,
     LanguageFile, DefaultSymbols, NotesFont, NotesSampleText, AutotypeTaskDelays,
+    AddEditFont, AddEditSampleText, AltNotesEditorCmdLineParms,
     NumStringPrefs};
 
   // for DoubleClickAction and ShiftDoubleClickAction
@@ -164,9 +170,6 @@ public:
   // for Backup Mask
   enum {minBKSFX = 0, BKSFX_None = 0, BKSFX_DateTime = 1, BKSFX_IncNumber = 2,
     maxBKSFX = 2};
-
-  // for System Tray icon color
-  enum {stiBlack = 0, stiBlue = 1, stiWhite = 2, stiYellow = 3};
 
   // For Password Policy
   // Preferences changed (Database or Application or Shortcuts)
@@ -200,6 +203,9 @@ public:
   bool GetPrefDefVal(BoolPrefs pref_enum) const;
   unsigned int GetPrefDefVal(IntPrefs pref_enum) const;
   StringX GetPrefDefVal(StringPrefs pref_enum) const;
+
+  int GetPrefMinVal(IntPrefs pref_enum) const;
+  int GetPrefMaxVal(IntPrefs pref_enum) const;
 
   // Get all preferences for minidump user stream
   StringX GetAllBoolPrefs(const bool bUseCopy = false);

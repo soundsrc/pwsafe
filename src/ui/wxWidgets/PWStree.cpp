@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -10,32 +10,32 @@
 *
 */
 // For compilers that support precompilation, includes "wx/wx.h".
-#include "wx/wxprec.h"
+#include <wx/wxprec.h>
 
 #ifdef __BORLANDC__
 #pragma hdrstop
 #endif
 
 #ifndef WX_PRECOMP
-#include "wx/wx.h"
+#include <wx/wx.h>
 #endif
 
 ////@begin includes
-#include "wx/imaglist.h"
+#include <wx/imaglist.h>
+#include <wx/tokenzr.h>
 ////@end includes
-#include <utility> // for make_pair
-#include <vector>
 
 #include "PWStree.h"
 #include "passwordsafeframe.h"
 #include "core/PWSprefs.h"
 #include "../../core/Command.h"
 
+#include <utility> // for make_pair
+#include <vector>
+
 #ifdef __WXMSW__
 #include <wx/msw/msvcrt.h>
 #endif
-
-#include <wx/tokenzr.h>
 
 ////@begin XPM images
 ////@end XPM images
@@ -92,13 +92,13 @@ BEGIN_EVENT_TABLE( PWSTreeCtrl, wxTreeCtrl )
   EVT_TREE_SEL_CHANGED( ID_TREECTRL, PWSTreeCtrl::OnTreectrlSelChanged )
   EVT_TREE_ITEM_ACTIVATED( ID_TREECTRL, PWSTreeCtrl::OnTreectrlItemActivated )
   EVT_TREE_ITEM_MENU( ID_TREECTRL, PWSTreeCtrl::OnContextMenu )
-  EVT_CHAR( PWSTreeCtrl::OnChar )
   EVT_CUSTOM(wxEVT_GUI_DB_PREFS_CHANGE, wxID_ANY, PWSTreeCtrl::OnDBGUIPrefsChange)
   EVT_TREE_ITEM_GETTOOLTIP( ID_TREECTRL, PWSTreeCtrl::OnGetToolTip )
   EVT_MENU( ID_ADDGROUP, PWSTreeCtrl::OnAddGroup )
   EVT_MENU( ID_RENAME, PWSTreeCtrl::OnRenameGroup )
   EVT_TREE_END_LABEL_EDIT( ID_TREECTRL, PWSTreeCtrl::OnEndLabelEdit )
   EVT_TREE_END_LABEL_EDIT( ID_TREECTRL_1, PWSTreeCtrl::OnEndLabelEdit )
+  EVT_TREE_KEY_DOWN( ID_TREECTRL, PWSTreeCtrl::OnKeyDown )
 ////@end PWSTreeCtrl event table entries
 END_EVENT_TABLE()
 
@@ -108,22 +108,33 @@ const wchar_t GROUP_SEP = L'.';
 class PWTreeItemData : public wxTreeItemData
 {
 public:
-  PWTreeItemData(): m_state(UNMODIFIED)
-  { pws_os::CUUID::NullUUID().GetARep(m_uuid); }
-  PWTreeItemData(bool): m_state(ADDED)
-  { pws_os::CUUID::NullUUID().GetARep(m_uuid); }
-  PWTreeItemData(const wxString& oldPath): m_state(EDITED), m_oldPath(oldPath)
-  { pws_os::CUUID::NullUUID().GetARep(m_uuid); }
-  PWTreeItemData(const CItemData &item): m_state(UNMODIFIED)
+  PWTreeItemData(): m_state(ItemState::UNMODIFIED)
+  { 
+    pws_os::CUUID::NullUUID().GetARep(m_uuid);
+  }
+  
+  PWTreeItemData(bool): m_state(ItemState::ADDED)
+  { 
+    pws_os::CUUID::NullUUID().GetARep(m_uuid);
+  }
+  
+  PWTreeItemData(const wxString& oldPath): m_state(ItemState::EDITED), m_oldPath(oldPath)
+  { 
+    pws_os::CUUID::NullUUID().GetARep(m_uuid);
+  }
+  
+  PWTreeItemData(const CItemData &item): m_state(ItemState::UNMODIFIED)
   {
     item.GetUUID(m_uuid);
   }
-  const uuid_array_t &GetUUID() const {return m_uuid;}
-  bool BeingAdded() const {return m_state == ADDED; }
-  bool BeingEdited() const {return m_state == EDITED; }
+  
+  const uuid_array_t &GetUUID() const { return m_uuid; }
+  bool BeingAdded() const { return m_state == ItemState::ADDED; }
+  bool BeingEdited() const { return m_state == ItemState::EDITED; }
   wxString GetOldPath() const { return m_oldPath; }
+  
 private:
-  typedef enum { UNMODIFIED, ADDED, EDITED } ItemState;
+  enum class ItemState { UNMODIFIED, ADDED, EDITED };
 
   uuid_array_t m_uuid;
   ItemState    m_state;
@@ -147,7 +158,6 @@ PWSTreeCtrl::PWSTreeCtrl(wxWindow* parent, PWScore &core,
   Create(parent, id, pos, size, style);
 }
 
-
 /*!
  * PWSTreeCtrl creator
  */
@@ -161,7 +171,6 @@ bool PWSTreeCtrl::Create(wxWindow* parent, wxWindowID id, const wxPoint& pos, co
   return true;
 }
 
-
 /*!
  * PWSTreeCtrl destructor
  */
@@ -172,7 +181,6 @@ PWSTreeCtrl::~PWSTreeCtrl()
 ////@end PWSTreeCtrl destruction
 }
 
-
 /*!
  * Member initialisation
  */
@@ -182,7 +190,6 @@ void PWSTreeCtrl::Init()
 ////@begin PWSTreeCtrl member initialisation
 ////@end PWSTreeCtrl member initialisation
 }
-
 
 /*!
  * Control creation for PWSTreeCtrl
@@ -208,7 +215,7 @@ void PWSTreeCtrl::CreateControls()
   };
   const int Nimages = sizeof(xpmList)/sizeof(xpmList[0]);
 
-  wxImageList *iList = new wxImageList(13, 13, true, Nimages);
+  auto *iList = new wxImageList(13, 13, true, Nimages);
   for (int i = 0; i < Nimages; i++)
     iList->Add(wxBitmap(xpmList[i]));
   AssignImageList(iList);
@@ -294,23 +301,33 @@ wxTreeItemId PWSTreeCtrl::AddGroup(const StringX &group)
   return ti;
 }
 
-
 wxString PWSTreeCtrl::ItemDisplayString(const CItemData &item) const
 {
   PWSprefs *prefs = PWSprefs::GetInstance();
   const wxString title = item.GetTitle().c_str();
+
+  // Title is a mandatory field - no need to worry if empty
   wxString disp = title;
 
   if (prefs->GetPref(PWSprefs::ShowUsernameInTree)) {
     const wxString user = item.GetUser().c_str();
-    if (!user.empty())
-      disp += wxT(" [") + user + wxT("]");
+    // User is NOT a mandatory field - but show not present by empty brackets i.e. []
+    // if user wants it displayed
+    disp += wxT(" [") + user + wxT("]");
   }
 
   if (prefs->GetPref(PWSprefs::ShowPasswordInTree)) {
     const wxString passwd = item.GetPassword().c_str();
-    if (!passwd.empty())
-      disp += wxT(" {") + passwd + wxT("}");
+    // Password is a mandatory field - no need to worry if empty
+    disp += wxT(" {") + passwd + wxT("}");
+  }
+
+  if (item.IsProtected()) { 
+    disp += wxT(" #");
+#ifdef NOTYET
+    wxUniChar padlock(0x1f512);
+    disp +=padlock;
+#endif
   }
 
   return disp;
@@ -387,7 +404,6 @@ void PWSTreeCtrl::UpdateItemField(const CItemData &item, CItemData::FieldType ft
   else if (ft == CItemData::TITLE || ft == CItemData::START ||
        (ft == CItemData::USER && prefs->GetPref(PWSprefs::ShowUsernameInTree)) ||
        (ft == CItemData::PASSWORD && prefs->GetPref(PWSprefs::ShowPasswordInTree))) {
-    wxRect rc;
     wxTreeItemId ti = Find(item);
     if (ti.IsOk()) {
       SetItemText(ti, ItemDisplayString(item));
@@ -411,18 +427,17 @@ void PWSTreeCtrl::AddItem(const CItemData &item)
 CItemData *PWSTreeCtrl::GetItem(const wxTreeItemId &id) const
 {
   if (!id.IsOk())
-    return NULL;
+    return nullptr;
 
-  PWTreeItemData *itemData = dynamic_cast<PWTreeItemData *>(GetItemData(id));
+  auto *itemData = dynamic_cast<PWTreeItemData *>(GetItemData(id));
   // return if a group is selected
-  if (itemData == NULL)
-    return NULL;
+  if (itemData == nullptr)
+    return nullptr;
 
-  ItemListIter itemiter = m_core.Find(itemData->GetUUID());
+  auto itemiter = m_core.Find(itemData->GetUUID());
   if (itemiter == m_core.GetEntryEndIter())
-    return NULL;
+    return nullptr;
   return &itemiter->second;
-
 }
 
 //overridden from base for case-insensitive sort
@@ -462,7 +477,7 @@ void PWSTreeCtrl::SortChildrenRecursively(const wxTreeItemId& item)
 wxTreeItemId PWSTreeCtrl::Find(const CUUID &uuid) const
 {
   wxTreeItemId fail;
-  UUIDTIMapT::const_iterator iter = m_item_map.find(uuid);
+  auto iter = m_item_map.find(uuid);
   if (iter != m_item_map.end())
     return iter->second;
   else
@@ -514,7 +529,6 @@ bool PWSTreeCtrl::Remove(const CUUID &uuid)
   }
 }
 
-
 void PWSTreeCtrl::SetItemImage(const wxTreeItemId &node,
                                const CItemData &item)
 {
@@ -552,12 +566,11 @@ void PWSTreeCtrl::OnTreectrlItemActivated( wxTreeEvent& evt )
   }
   else {
     CItemData *ci = GetItem(item);
-    if (ci != NULL)
+    if (ci != nullptr)
       dynamic_cast<PasswordSafeFrame *>(GetParent())->
         DispatchDblClickAction(*ci);
   }
 }
-
 
 /*!
  * wxEVT_TREE_ITEM_MENU event handler for ID_TREECTRL
@@ -582,32 +595,18 @@ void PWSTreeCtrl::OnGetToolTip( wxTreeEvent& evt )
   if (PWSprefs::GetInstance()->GetPref(PWSprefs::ShowNotesAsTooltipsInViews)) {
     wxTreeItemId id = evt.GetItem();
     const CItemData *ci = GetItem(id);
-    if (ci != NULL) {
+    if (ci != nullptr) {
       const wxString note = ci->GetNotes().c_str();
       evt.SetToolTip(note);
     }
   }
 }
 
-
-/*!
- * wxEVT_CHAR event handler for ID_TREECTRL
- */
-
-void PWSTreeCtrl::OnChar( wxKeyEvent& evt )
-{
-  if (evt.GetKeyCode() == WXK_ESCAPE &&
-      PWSprefs::GetInstance()->GetPref(PWSprefs::EscExits)) {
-    GetParent()->Close();
-  }
-  evt.Skip();
-}
-
 void PWSTreeCtrl::OnDBGUIPrefsChange(wxEvent& evt)
 {
   UNREFERENCED_PARAMETER(evt);
-  PasswordSafeFrame *pwsframe = dynamic_cast<PasswordSafeFrame *>(GetParent());
-  wxASSERT(pwsframe != NULL);
+  auto *pwsframe = dynamic_cast<PasswordSafeFrame *>(GetParent());
+  wxASSERT(pwsframe != nullptr);
   if (pwsframe->IsTreeView())
     pwsframe->RefreshViews();
 }
@@ -651,10 +650,18 @@ void PWSTreeCtrl::OnRenameGroup(wxCommandEvent& /* evt */)
 
 void PWSTreeCtrl::OnEndLabelEdit( wxTreeEvent& evt )
 {
+  const wxString &label =evt.GetLabel();
+
+  if (label.empty()) {
+    // empty entry or group names are a non-no...
+    evt.Veto();
+    return;
+  }
+
   switch (evt.GetId()) {
     case ID_TREECTRL:
     {
-      if (evt.GetLabel().Find(wxT('.')) == wxNOT_FOUND) {
+      if (label.Find(wxT('.')) == wxNOT_FOUND) {
       // Not safe to modify the tree ctrl in any way.  Wait for the stack to unwind.
       wxTreeEvent newEvt(evt);
       newEvt.SetId(ID_TREECTRL_1);
@@ -670,7 +677,7 @@ void PWSTreeCtrl::OnEndLabelEdit( wxTreeEvent& evt )
     {
       wxTreeItemId groupItem = evt.GetItem();
       if (groupItem.IsOk()) {
-        PWTreeItemData* data = dynamic_cast<PWTreeItemData *>(GetItemData(groupItem));
+        auto *data = dynamic_cast<PWTreeItemData *>(GetItemData(groupItem));
         if (data && data->BeingAdded()) {
           // A new group being added
           FinishAddingGroup(evt, groupItem);
@@ -686,6 +693,21 @@ void PWSTreeCtrl::OnEndLabelEdit( wxTreeEvent& evt )
       wxFAIL_MSG(wxString::Format(wxT("End Label Edit handler received an unexpected identifier: %d"), evt.GetId()));
       break;
   }
+}
+
+void PWSTreeCtrl::OnKeyDown(wxTreeEvent& evt)
+{
+  if (evt.GetKeyCode() == WXK_LEFT) {
+    
+    wxTreeItemId item = GetSelection();
+    
+    if (item.IsOk() && ItemIsGroup(item) && IsExpanded(item)) {
+      Collapse(item);
+      return;
+    }
+  }
+
+  evt.Skip();
 }
 
 void PWSTreeCtrl::FinishAddingGroup(wxTreeEvent& evt, wxTreeItemId groupItem)
@@ -762,7 +784,6 @@ void PWSTreeCtrl::FinishRenamingGroup(wxTreeEvent& evt, wxTreeItemId groupItem, 
     wxTreeCtrl::SelectItem(newItem);
 }
 
-
 /*!
  * wxEVT_COMMAND_TREE_SEL_CHANGED event handler for ID_TREECTRL
  */
@@ -796,3 +817,134 @@ void PWSTreeCtrl::SetFilterState(bool state)
     ColourChildren(this, root, *colour);
 }
 
+/**
+ * Saves the state of all groups that have child items in tree view.
+ */
+void PWSTreeCtrl::SaveGroupDisplayState()
+{
+  auto groupstates = GetGroupDisplayState();
+  
+  if (!groupstates.empty()) {
+    m_core.SetDisplayStatus(groupstates);
+  }
+}
+
+/**
+ * Restores the state of each individual group in the tree.
+ * If the amount of groups in the tree view differs from the 
+ * amount of stored group states nothing will be done.
+ */
+void PWSTreeCtrl::RestoreGroupDisplayState()
+{
+  auto currentstates = GetGroupDisplayState();
+  auto groupstates   = m_core.GetDisplayStatus();
+  
+  if (currentstates.size() != groupstates.size()) {
+    return;
+  }
+  
+  if (!groupstates.empty()) {
+    SetGroupDisplayState(groupstates);
+  }
+}
+ 
+/**
+ * Collects the state of all group related items.
+ * 
+ * A group can be in state expanded or collapsed. The state for an expanded group item 
+ * is represented as <i>true</i>, whereas a collapsed group is reflected via <i>false</i>.
+ * 
+ * @note The booleans in the vector from first to last index represent the groups as
+ *       they appear in the tree from top to bottom.
+ * @return a vector of booleans representing the state of each group.
+ */
+std::vector<bool> PWSTreeCtrl::GetGroupDisplayState()
+{
+  std::vector<bool> groupstates;
+  
+  TraverseTree(
+    GetRootItem(), 
+    [&]
+    (wxTreeItemId itemId) -> void { 
+      groupstates.push_back(IsExpanded(itemId));
+    }
+  );
+  
+  return groupstates;
+}
+
+/**
+ * Sets the state of each individual group to be visually expanded or collapsed.
+ * 
+ * A boolean of <i>true</i> in the vector will lead to an expanded group, whereas 
+ * a boolean of <i>false</i> will trigger collapsing of a group.
+ * 
+ * @note The booleans in the vector from first to last index represent the groups as
+ *       they appear in the tree from top to bottom.
+ * @param groupstates a vector of booleans representing the state of each group.
+ */
+void PWSTreeCtrl::SetGroupDisplayState(const std::vector<bool> &groupstates)
+{
+  int groupIndex = 0;
+  
+  TraverseTree(
+    GetRootItem(), 
+    [&]
+    (wxTreeItemId itemId) -> void { 
+      if (groupIndex < groupstates.size())
+        groupstates[groupIndex++] ? Expand(itemId) : Collapse(itemId);
+    }
+  );
+}
+
+/**
+ * Sets the state for each individual group item to be visually expanded.
+ */
+void PWSTreeCtrl::SetGroupDisplayStateAllExpanded()
+{
+  auto groupstates = GetGroupDisplayState();
+  
+  for (auto &&state : groupstates) {
+    state = true;
+  }
+  
+  SetGroupDisplayState(groupstates);
+}
+
+/**
+ * Sets the state for each individual group item to be visually collapsed.
+ */
+void PWSTreeCtrl::SetGroupDisplayStateAllCollapsed()
+{
+  auto groupstates = GetGroupDisplayState();
+  
+  for (auto &&state : groupstates) {
+    state = false;
+  }
+  
+  SetGroupDisplayState(groupstates);
+}
+
+template<typename GroupItemConsumer>
+void PWSTreeCtrl::TraverseTree(wxTreeItemId itemId, GroupItemConsumer&& consumer)
+{
+  wxTreeItemIdValue cookie;
+  
+  if (itemId.IsOk()) {
+    
+    if (ItemHasChildren(itemId)) {
+      
+      // The root item is not one of the visible tree items.
+      // It is neither an group item nor an password related item.
+      // Hence, the root item shouldn't be processed, but the 
+      // traversal throught the tree should continue.
+      if (itemId.GetID() != GetRootItem().GetID()) {
+        consumer(itemId);
+      }
+      
+      TraverseTree(GetFirstChild(itemId, cookie), consumer);
+    }
+    
+    TraverseTree(GetNextSibling(itemId), consumer);
+  }
+}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -34,13 +34,11 @@
 #include "graphics/toolbar/new/copypassword_disabled.xpm"
 ////@end XPM images
 
-
 /*!
  * CManagePasswordPolicies type definition
  */
 
 IMPLEMENT_CLASS( CManagePasswordPolicies, wxDialog )
-
 
 /*!
  * CManagePasswordPolicies event table definition
@@ -53,7 +51,7 @@ BEGIN_EVENT_TABLE( CManagePasswordPolicies, wxDialog )
 
   EVT_BUTTON( wxID_NEW, CManagePasswordPolicies::OnNewClick )
 
-  EVT_BUTTON( ID_EDIT_PP, CManagePasswordPolicies::OnEditPpClick )
+  EVT_BUTTON( ID_EDIT_PP, CManagePasswordPolicies::OnEditClick )
 
   EVT_BUTTON( wxID_DELETE, CManagePasswordPolicies::OnDeleteClick )
 
@@ -75,25 +73,27 @@ BEGIN_EVENT_TABLE( CManagePasswordPolicies, wxDialog )
 
 ////@end CManagePasswordPolicies event table entries
 
-END_EVENT_TABLE()
+  EVT_SIZE( CManagePasswordPolicies::OnSize )
 
+  EVT_MAXIMIZE( CManagePasswordPolicies::OnMaximize )
+
+END_EVENT_TABLE()
 
 /*!
  * CManagePasswordPolicies constructor
  */
 
-
 CManagePasswordPolicies::CManagePasswordPolicies( wxWindow* parent,  PWScore &core, wxWindowID id,
               const wxString& caption, const wxPoint& pos,
               const wxSize& size, long style )
-: m_core(core), m_iundo_pos(-1), m_curPolRow(-1),
+: m_core(core), m_curPolRow(-1),
   m_iSortNamesIndex(0), m_iSortEntriesIndex(0),
-  m_bSortNamesAscending(true), m_bSortEntriesAscending(true), m_bViewPolicy(true)
+  m_bSortNamesAscending(true), m_bSortEntriesAscending(true), m_bViewPolicy(true),
+  m_bShowPolicyEntriesInitially(true)
 {
   Init();
   Create(parent, id, caption, pos, size, style);
 }
-
 
 /*!
  * CManagePasswordPolicies creator
@@ -115,7 +115,6 @@ bool CManagePasswordPolicies::Create( wxWindow* parent, wxWindowID id, const wxS
   return true;
 }
 
-
 /*!
  * CManagePasswordPolicies destructor
  */
@@ -126,7 +125,6 @@ CManagePasswordPolicies::~CManagePasswordPolicies()
 ////@end CManagePasswordPolicies destruction
 }
 
-
 /*!
  * Member initialisation
  */
@@ -134,17 +132,15 @@ CManagePasswordPolicies::~CManagePasswordPolicies()
 void CManagePasswordPolicies::Init()
 {
 ////@begin CManagePasswordPolicies member initialisation
-  m_PolicyNames = NULL;
-  m_passwordCtrl = NULL;
-  m_lowerTableDesc = NULL;
-  m_PolicyDetails = NULL;
-  m_PolicyEntries = NULL;
+  m_PolicyNames = nullptr;
+  m_passwordCtrl = nullptr;
+  m_lowerTableDesc = nullptr;
+  m_PolicyDetails = nullptr;
+  m_PolicyEntries = nullptr;
 ////@end CManagePasswordPolicies member initialisation
-  m_MapPSWDPLC = m_core.GetPasswordPolicies();
 
-  m_st_default_pp = PWSprefs::GetInstance()->GetDefaultPolicy();
+  m_PolicyManager = std::unique_ptr<PolicyManager>(new PolicyManager(m_core));
 }
-
 
 /*!
  * Control creation for CManagePasswordPolicies
@@ -155,27 +151,28 @@ void CManagePasswordPolicies::CreateControls()
 ////@begin CManagePasswordPolicies content construction
   CManagePasswordPolicies* itemDialog1 = this;
 
-  wxBoxSizer* itemBoxSizer2 = new wxBoxSizer(wxVERTICAL);
+  auto *itemBoxSizer2 = new wxBoxSizer(wxVERTICAL);
   itemDialog1->SetSizer(itemBoxSizer2);
 
   wxStaticText* itemStaticText3 = new wxStaticText( itemDialog1, wxID_STATIC, _("Available Password Policies:"), wxDefaultPosition, wxDefaultSize, 0 );
   itemBoxSizer2->Add(itemStaticText3, 0, wxALIGN_LEFT|wxALL, 5);
 
-  wxBoxSizer* itemBoxSizer4 = new wxBoxSizer(wxHORIZONTAL);
-  itemBoxSizer2->Add(itemBoxSizer4, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5);
+  auto *itemBoxSizer4 = new wxBoxSizer(wxHORIZONTAL);
+  itemBoxSizer2->Add(itemBoxSizer4, 1, wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALL, 5);
 
-  m_PolicyNames = new wxGrid( itemDialog1, ID_POLICYLIST, wxDefaultPosition, wxSize(269, 150), wxSUNKEN_BORDER|wxHSCROLL|wxVSCROLL );
+  m_PolicyNames = new wxGrid( itemDialog1, ID_POLICYLIST, wxDefaultPosition, wxSize(-1, 150), wxSUNKEN_BORDER|wxHSCROLL|wxVSCROLL );
   m_PolicyNames->SetDefaultColSize(100);
   m_PolicyNames->SetDefaultRowSize(25);
   m_PolicyNames->SetColLabelSize(25);
-  m_PolicyNames->SetRowLabelSize(50);
+  m_PolicyNames->SetRowLabelSize(0);
   m_PolicyNames->CreateGrid(10, 2, wxGrid::wxGridSelectRows);
-  itemBoxSizer4->Add(m_PolicyNames, 3, wxGROW|wxALL, 5);
+  m_PolicyNames->EnableEditing(false);
+  itemBoxSizer4->Add(m_PolicyNames, 3, wxEXPAND|wxALL, 5);
 
-  wxBoxSizer* itemBoxSizer6 = new wxBoxSizer(wxVERTICAL);
+  auto *itemBoxSizer6 = new wxBoxSizer(wxVERTICAL);
   itemBoxSizer4->Add(itemBoxSizer6, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
-  wxGridSizer* itemGridSizer7 = new wxGridSizer(0, 2, 0, 0);
+  auto *itemGridSizer7 = new wxGridSizer(0, 2, 0, 0);
   itemBoxSizer6->Add(itemGridSizer7, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5);
 
   wxButton* itemButton8 = new wxButton( itemDialog1, wxID_NEW, _("&New"), wxDefaultPosition, wxDefaultSize, 0 );
@@ -197,13 +194,13 @@ void CManagePasswordPolicies::CreateControls()
   itemGridSizer7->Add(itemButton13, 0, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
   wxStaticBox* itemStaticBoxSizer14Static = new wxStaticBox(itemDialog1, wxID_STATIC, _("Test Selected Policy"));
-  wxStaticBoxSizer* itemStaticBoxSizer14 = new wxStaticBoxSizer(itemStaticBoxSizer14Static, wxVERTICAL);
+  auto *itemStaticBoxSizer14 = new wxStaticBoxSizer(itemStaticBoxSizer14Static, wxVERTICAL);
   itemBoxSizer6->Add(itemStaticBoxSizer14, 0, wxGROW|wxALL, 5);
 
   wxButton* itemButton15 = new wxButton( itemDialog1, ID_GENERATE_PASSWORD, _("Generate"), wxDefaultPosition, wxDefaultSize, 0 );
   itemStaticBoxSizer14->Add(itemButton15, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5);
 
-  wxBoxSizer* itemBoxSizer16 = new wxBoxSizer(wxHORIZONTAL);
+  auto *itemBoxSizer16 = new wxBoxSizer(wxHORIZONTAL);
   itemStaticBoxSizer14->Add(itemBoxSizer16, 0, wxGROW|wxALL, 5);
 
   m_passwordCtrl = new wxTextCtrl( itemDialog1, ID_PASSWORD_TXT, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
@@ -219,26 +216,28 @@ void CManagePasswordPolicies::CreateControls()
   m_lowerTableDesc = new wxStaticText( itemDialog1, wxID_STATIC, _("Selected policy details:"), wxDefaultPosition, wxDefaultSize, 0 );
   itemBoxSizer2->Add(m_lowerTableDesc, 0, wxALIGN_LEFT|wxALL, 5);
 
-  wxBoxSizer* itemBoxSizer20 = new wxBoxSizer(wxHORIZONTAL);
-  itemBoxSizer2->Add(itemBoxSizer20, 0, wxGROW|wxALL, 5);
+  auto *itemBoxSizer20 = new wxBoxSizer(wxHORIZONTAL);
+  itemBoxSizer2->Add(itemBoxSizer20, 1, wxEXPAND|wxALL, 5);
 
   m_PolicyDetails = new wxGrid( itemDialog1, ID_POLICYPROPERTIES, wxDefaultPosition, wxSize(-1, 150), wxSUNKEN_BORDER|wxHSCROLL|wxVSCROLL );
-  m_PolicyDetails->SetDefaultColSize(210);
+  m_PolicyDetails->SetDefaultColSize(220);
   m_PolicyDetails->SetDefaultRowSize(25);
   m_PolicyDetails->SetColLabelSize(25);
-  m_PolicyDetails->SetRowLabelSize(50);
-  m_PolicyDetails->CreateGrid(5, 2, wxGrid::wxGridSelectRows);
-  itemBoxSizer20->Add(m_PolicyDetails, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+  m_PolicyDetails->SetRowLabelSize(0);
+  m_PolicyDetails->CreateGrid(8, 2, wxGrid::wxGridSelectRows);
+  m_PolicyDetails->EnableEditing(false);
+  itemBoxSizer20->Add(m_PolicyDetails, 1, wxEXPAND|wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
   m_PolicyEntries = new wxGrid( itemDialog1, ID_POLICYENTRIES, wxDefaultPosition, wxSize(-1, 150), wxSUNKEN_BORDER|wxHSCROLL|wxVSCROLL );
   m_PolicyEntries->SetDefaultColSize(140);
   m_PolicyEntries->SetDefaultRowSize(25);
   m_PolicyEntries->SetColLabelSize(25);
-  m_PolicyEntries->SetRowLabelSize(50);
-  m_PolicyEntries->CreateGrid(5, 3, wxGrid::wxGridSelectRows);
-  itemBoxSizer20->Add(m_PolicyEntries, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+  m_PolicyEntries->SetRowLabelSize(0);
+  m_PolicyEntries->CreateGrid(8, 3, wxGrid::wxGridSelectRows);
+  m_PolicyEntries->EnableEditing(false);
+  itemBoxSizer20->Add(m_PolicyEntries, 1, wxEXPAND|wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
-  wxStdDialogButtonSizer* itemStdDialogButtonSizer23 = new wxStdDialogButtonSizer;
+  auto *itemStdDialogButtonSizer23 = new wxStdDialogButtonSizer;
 
   itemBoxSizer2->Add(itemStdDialogButtonSizer23, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5);
   wxButton* itemButton24 = new wxButton( itemDialog1, wxID_OK, _("&OK"), wxDefaultPosition, wxDefaultSize, 0 );
@@ -263,40 +262,45 @@ void CManagePasswordPolicies::CreateControls()
     FindWindow(wxID_CANCEL)->Show(false);
 
     FindWindow(wxID_OK)->SetLabel(_("Close"));
-    FindWindow(wxID_EDIT)->SetLabel(_("View"));
+    FindWindow(ID_EDIT_PP)->SetLabel(_("View"));
   }
 
   // We have 2 grids, but we show only one at a time,
   // toggle when user clicks on ID_LIST button.
   // Setting these up:
-  m_PolicyNames->SetRowLabelSize(0);
-  int col0Width = m_PolicyNames->GetColSize(0);
-  col0Width += 45;
-  m_PolicyNames->SetColSize(0, col0Width);
   m_PolicyNames->SetColLabelValue(0, _("Policy Name"));
   m_PolicyNames->SetColLabelValue(1, _("Use count"));
+  m_PolicyNames->InvalidateBestSize();
+  m_PolicyNames->SetClientSize(m_PolicyNames->GetBestSize());
   UpdateNames();
+  m_PolicyNames->Fit();
   m_PolicyNames->SelectRow(0);
 
   // Since we select the default policy, disable List & Delete
   FindWindow(ID_LIST)->Enable(false);
   FindWindow(wxID_DELETE)->Enable(false);
 
-  m_PolicyDetails->SetRowLabelSize(0);
   m_PolicyDetails->SetColLabelValue(0, _("Policy Field"));
   m_PolicyDetails->SetColLabelValue(1, _("Value"));
   UpdateDetails();
+  m_PolicyDetails->Fit();
 
-  m_PolicyEntries->SetRowLabelSize(0);
   m_PolicyEntries->SetColLabelValue(0, _("Group"));
   m_PolicyEntries->SetColLabelValue(1, _("Title"));
   m_PolicyEntries->SetColLabelValue(2, _("User Name"));
+  m_PolicyEntries->InvalidateBestSize();
+  m_PolicyEntries->SetClientSize(m_PolicyEntries->GetBestSize());
+  m_PolicyEntries->Fit();
 
-  ShowPolicyDetails();
+  ShowPolicyDetails(); // Show initially table with policy details.
+
+  m_ScrollbarWidth = wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, this) - 10;
+
 
   // Max. of 255 policy names allowed - only 2 hex digits used for number
-  if (m_MapPSWDPLC.size() >= 255)
+  if (m_PolicyManager->HasMaxPolicies()) {
     FindWindow(wxID_NEW)->Enable(false);
+  }
 
   // No changes yet
   FindWindow(wxID_UNDO)->Enable(false);
@@ -304,7 +308,6 @@ void CManagePasswordPolicies::CreateControls()
 
   m_PolicyNames->SetFocus();
 }
-
 
 /*!
  * Should we show tooltips?
@@ -358,7 +361,6 @@ bool CManagePasswordPolicies::Show(bool show)
   return wxDialog::Show(show);
 }
 
-
 void CManagePasswordPolicies::ShowPolicyDetails()
 {
   m_bViewPolicy = true;
@@ -381,43 +383,73 @@ void CManagePasswordPolicies::ShowPolicyEntries()
   m_PolicyDetails->Hide();
   m_PolicyDetails->Enable(false);
   GetSizer()->Layout();
+
+  if (m_bShowPolicyEntriesInitially) {
+    m_bShowPolicyEntriesInitially = false;
+
+    // All columns of policy entries shall get the same space (see also CManagePasswordPolicies::ResizeGridColumns)
+    int width = m_PolicyEntries->GetClientSize().GetWidth() - m_PolicyEntries->GetRowLabelSize() - m_ScrollbarWidth;
+
+    if (width > 0) {
+      m_PolicyEntries->SetColSize(0, width/3);
+      m_PolicyEntries->SetColSize(1, width/3);
+      m_PolicyEntries->SetColSize(2, width/3);
+    }
+  }
 }
 
 void CManagePasswordPolicies::UpdateNames()
 {
-  int nPos = 0;
+  int row = 0;
+  const auto& policies      = m_PolicyManager->GetPolicies();
+  const auto& defaultPolicy = m_PolicyManager->GetDefaultPolicy();
+
   m_PolicyNames->ClearGrid();
 
   // Add in the default policy as the first entry
-  m_PolicyNames->SetCellValue(nPos, 0, _("Default Policy"));
-  m_PolicyNames->SetCellValue(nPos, 1, _("N/A"));
-  m_PolicyNames->SetReadOnly(nPos, 0); m_PolicyNames->SetReadOnly(nPos, 1);
+  m_PolicyNames->SetCellValue(row, 0, PolicyManager::GetDefaultPolicyName());
+  m_PolicyNames->SetCellValue(row, 1, _("N/A"));
 
-  // Add in all other policies - ItemData == offset into map
-  PSWDPolicyMapIter iter;
-  nPos++;
-  for (iter = m_MapPSWDPLC.begin(); iter != m_MapPSWDPLC.end(); iter++) {
-    m_PolicyNames->InsertRows(nPos);
-    m_PolicyNames->SetCellValue(nPos, 0, iter->first.c_str());
+  for (const auto& policy : policies) {
+
+    row++;
+
+    // Re-use existing rows and only add a new one if needed
+    if (m_PolicyNames->GetNumberRows() <= row) {
+      m_PolicyNames->InsertRows(row);
+    }
+
+    // Add policy name
+    m_PolicyNames->SetCellValue(row, 0, policy.first.c_str());
+
+    // Add policy usage counter
     wxString useCount;
-    if (iter->second.usecount != 0)
-      useCount.Printf(wxT("%d"),iter->second.usecount);
-    else
+    if (policy.second.usecount != 0) {
+      useCount << policy.second.usecount;
+    }
+    else {
       useCount = _("Not used");
-    m_PolicyNames->SetCellValue(nPos, 1, useCount);
-    m_PolicyNames->SetReadOnly(nPos, 0); m_PolicyNames->SetReadOnly(nPos, 1);
+    }
+
+    m_PolicyNames->SetCellValue(row, 1, useCount);
   }
 }
 
-static void wxRowPutter(int row, const stringT &name, const stringT &value,
-                             void *table)
+/**
+ * Callback function used by PWPolicy::Policy2Table
+ */
+static void wxRowPutter(int row, const stringT &name, const stringT &value, void *table)
 {
-  // Callback function used by PWPolicy::Policy2Table
-  wxGrid *tableControl = (wxGrid *)table;
-  tableControl->InsertRows(row);
-  tableControl->SetCellValue(row, 0, name.c_str());
-  tableControl->SetCellValue(row, 1, value.c_str());
-  tableControl->SetReadOnly(row, 0); tableControl->SetReadOnly(row, 1);
+  auto *tableControl = static_cast<wxGrid *>(table);
+
+  if (tableControl) {
+    if (tableControl->GetNumberRows() <= row) {
+      tableControl->InsertRows(row);
+    }
+
+    tableControl->SetCellValue(row, 0, name.c_str());
+    tableControl->SetCellValue(row, 1, value.c_str());
+  }
 }
 
 int CManagePasswordPolicies::GetSelectedRow() const
@@ -430,32 +462,33 @@ int CManagePasswordPolicies::GetSelectedRow() const
   }
 }
 
+/**
+ * Provides the selected policy.
+ *
+ * If first row or no row selected, then fill in with the database default,
+ * otherwise use the name entry.
+ */
 PWPolicy CManagePasswordPolicies::GetSelectedPolicy() const
 {
-  /*
-    If first row or no row selected, then fill in with the database default,
-    otherwise use the name entry
-  */
-
   int row = GetSelectedRow();
+
   if (row > 0) {
     const wxString policyname = m_PolicyNames->GetCellValue(row, 0);
 
-    PSWDPolicyMapCIter iter = m_MapPSWDPLC.find(tostringx(policyname));
-    if (iter == m_MapPSWDPLC.end())
-      return m_st_default_pp;
-
-    return iter->second;
-  } else {
-    return m_st_default_pp;
+    if (m_PolicyManager->HasPolicy(policyname.ToStdWstring())) {
+      return m_PolicyManager->GetPolicy(policyname.ToStdWstring());
+    }
   }
+
+  return m_PolicyManager->GetDefaultPolicy();
 }
 
 void CManagePasswordPolicies::UpdateDetails()
 {
   // Update details table to reflect selected policy, if any
-  if (GetSelectedRow() == -1)
+  if (GetSelectedRow() < 0) {
     return;
+  }
 
   PWPolicy st_pp = GetSelectedPolicy();
 
@@ -463,66 +496,95 @@ void CManagePasswordPolicies::UpdateDetails()
   st_pp.Policy2Table(wxRowPutter, m_PolicyDetails);
 }
 
-void CManagePasswordPolicies::UpdatePolicy(const wxString &polname, const PWPolicy &pol,
-                                           CPP_FLAGS mode)
+void CManagePasswordPolicies::UpdateEntryList()
 {
-  if (polname == _("Default Policy"))
-    m_st_default_pp = pol;
-  else
-    m_MapPSWDPLC[tostringx(polname)] = pol;
-#ifdef NOTYET
-    // Save changes for Undo/Redo
-    PWPolicyChange st_change;
-    st_change.flags = mode;
-    st_change.name = policyname;
-    st_change.st_pp_save = m_iSelectedItem != 0 ? m_mapIter->second : m_st_default_pp;
-    switch (mode) {
-    case CPP_ADD:
-      break;
-    case CPP_MODIFIED:
-      break;
-    case CPP_DELETE:
-      break;
-    default:
-      ASSERT(0);
-    }
+  int row = GetSelectedRow();
 
-    if (m_iSelectedItem != 0) {
-      // Changed a named password policy
-      PSWDPolicyMapIter iter_new = m_MapPSWDPLC.find(StringX(policyname.c_str()));
-      if (iter_new == m_MapPSWDPLC.end())
-        ASSERT(0);
-      st_change.st_pp_new = iter_new->second;
-    } else {
-      // Changed the database default policy
-      st_change.st_pp_new = m_st_default_pp;
-    }
-  if (m_iundo_pos != (int)m_vchanges.size() - 1) {
-    // We did have changes that could have been redone
-    // But not anymore - delete all these to add new change on the end
-    m_vchanges.resize(m_iundo_pos + 1);
+  if (row < 0) {
+    return;
   }
 
-  // Add new change
-  m_vchanges.push_back(st_change);
-  // Update pointer to the one that is next to be undone
-  m_iundo_pos++;
-  // Update buttons appropriately
-  FindWindow(wxID_UNDO)->Enable(true);
-  FindWindow(wxID_REDO)->Enable(false);
-#else
-  UNREFERENCED_PARAMETER(mode);
-#endif
-  // Update lists
-  UpdateNames();
-  int N = m_PolicyNames->GetNumberRows();
-  for (int row = 0; row < N; row++)
-    if (m_PolicyNames->GetCellValue(row, 0) == polname) {
-      m_PolicyNames->SelectRow(row);
-      break;
-    }
+  m_PolicyEntries->ClearGrid();
 
-  UpdateDetails();
+  GTUSet gtuSet;
+
+  if (m_core.InitialiseGTU(gtuSet, StringX(m_PolicyNames->GetCellValue(row, 0).c_str()))) {
+
+    row = 0;
+
+    for (const auto& gtuItem : gtuSet) {
+
+      // Re-use existing rows and only add a new one if needed
+      if (m_PolicyEntries->GetNumberRows() <= row) {
+        m_PolicyEntries->InsertRows(row);
+      }
+
+      m_PolicyEntries->SetCellValue(row, 0, gtuItem.group.c_str());
+      m_PolicyEntries->SetCellValue(row, 1, gtuItem.title.c_str());
+      m_PolicyEntries->SetCellValue(row, 2, gtuItem.user.c_str());
+      row++;
+    }
+  }
+}
+
+void CManagePasswordPolicies::UpdateSelection(const wxString& policyname)
+{
+  int rows = m_PolicyNames->GetNumberRows();
+
+  for (int row = 0; row < rows; ++row) {
+
+    if (m_PolicyNames->GetCellValue(row, 0) == policyname) {
+      m_PolicyNames->SetFocus();
+      m_PolicyNames->SelectRow(row);
+      m_PolicyNames->SetGridCursor(row, 0);
+    }
+  }
+}
+
+void CManagePasswordPolicies::UpdateUndoRedoButtons()
+{
+  FindWindow(wxID_UNDO)->Enable(m_PolicyManager->CanUndo());
+  FindWindow(wxID_REDO)->Enable(m_PolicyManager->CanRedo());
+}
+
+void CManagePasswordPolicies::ResizeGridColumns()
+{
+  int width = 0;
+
+  //
+  // Table with policy names
+  //
+
+  // First column of policy names grid shall get available space, whereas the second column has fixed size
+  width = m_PolicyNames->GetClientSize().GetWidth() - m_PolicyNames->GetRowLabelSize() - m_PolicyNames->GetColSize(1) - m_ScrollbarWidth;
+
+  if (width > 0) {
+    m_PolicyNames->SetColSize(0, width);
+  }
+
+  //
+  // Table with policy details
+  //
+
+  // Second column of policy details grid shall get available space, whereas the first column has fixed size
+  width = m_PolicyDetails->GetClientSize().GetWidth() - m_PolicyDetails->GetRowLabelSize() - m_PolicyDetails->GetColSize(0) - m_ScrollbarWidth;
+
+  if (width > 0) {
+    m_PolicyDetails->SetColSize(1, width);
+  }
+
+  //
+  // Table with policy entries
+  //
+
+  // All columns of policy entries shall get the same space
+  width = m_PolicyEntries->GetClientSize().GetWidth() - m_PolicyEntries->GetRowLabelSize() - m_ScrollbarWidth;
+
+  if (width > 0) {
+    m_PolicyEntries->SetColSize(0, width/3);
+    m_PolicyEntries->SetColSize(1, width/3);
+    m_PolicyEntries->SetColSize(2, width/3);
+  }
 }
 
 /*!
@@ -531,64 +593,112 @@ void CManagePasswordPolicies::UpdatePolicy(const wxString &polname, const PWPoli
 
 void CManagePasswordPolicies::OnNewClick( wxCommandEvent& )
 {
-  CPasswordPolicy ppdlg(this, m_core, m_MapPSWDPLC);
-  PWPolicy st_pp = m_st_default_pp;
-  ppdlg.SetPolicyData(wxEmptyString, st_pp);
+  auto policies = m_PolicyManager->GetPolicies();
+  auto policy   = m_PolicyManager->GetDefaultPolicy();
+
+  CPasswordPolicy ppdlg(this, m_core, policies);
+  ppdlg.SetPolicyData(wxEmptyString, policy);
+
   if (ppdlg.ShowModal() == wxID_OK) {
     wxString policyname;
 
-    ppdlg.GetPolicyData(policyname, st_pp);
-    UpdatePolicy(policyname, st_pp, CPP_ADD);
+    ppdlg.GetPolicyData(policyname, policy);
+
+    m_PolicyManager->PolicyAdded(policyname.ToStdWstring(), policy);
+
+    UpdateNames();
+    UpdateSelection(policyname);
+    UpdateUndoRedoButtons();
   }
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_EDIT
  */
 
-void CManagePasswordPolicies::OnEditPpClick( wxCommandEvent& )
+void CManagePasswordPolicies::OnEditClick( wxCommandEvent& )
 {
   int row = GetSelectedRow();
-  if (row < 0)
+
+  if (row < 0) {
     return;
-  wxString policyname = m_PolicyNames->GetCellValue(row, 0);
-  PWPolicy st_pp;
+  }
+
+  const auto& policies = m_PolicyManager->GetPolicies();
+
+  wxString originalPolicyname;
+  wxString modifiedPolicyname;
+
+  PWPolicy originalPolicy;
+  PWPolicy modifiedPolicy;
 
   if (row == 0) { // 1st row is default
-    st_pp = m_st_default_pp;
-  } else {
-    PSWDPolicyMapIter mapIter = m_MapPSWDPLC.find(StringX(policyname.c_str()));
-    if (row != 0 && mapIter == m_MapPSWDPLC.end()) {
+    originalPolicyname = PolicyManager::GetDefaultPolicyName();
+    originalPolicy     = m_PolicyManager->GetDefaultPolicy();
+  }
+  else {          // All other rows hold user individual policy names
+
+    originalPolicyname = m_PolicyNames->GetCellValue(row, 0);
+
+    if (!(m_PolicyManager->HasPolicy(originalPolicyname.ToStdWstring()))) {
       ASSERT(0);
       return;
     }
-    st_pp = mapIter->second;
+
+    originalPolicy     = m_PolicyManager->GetPolicy(originalPolicyname.ToStdWstring());
   }
 
-  CPasswordPolicy ppdlg(this, m_core, m_MapPSWDPLC);
+  CPasswordPolicy ppdlg(this, m_core, policies);
 
-  ppdlg.SetPolicyData(policyname, st_pp);
+  ppdlg.SetPolicyData(originalPolicyname, originalPolicy);
+
   if (ppdlg.ShowModal() == wxID_OK) {
-    ppdlg.GetPolicyData(policyname, st_pp);
-    ASSERT(!policyname.IsEmpty());
-    UpdatePolicy(policyname, st_pp, CPP_MODIFIED);
+
+    ppdlg.GetPolicyData(modifiedPolicyname, modifiedPolicy);
+
+    if (originalPolicyname != modifiedPolicyname) {
+
+      m_PolicyManager->PolicyRenamed(
+        originalPolicyname.ToStdWstring(), modifiedPolicyname.ToStdWstring(),
+        originalPolicy, modifiedPolicy
+      );
+
+      UpdateNames();
+      UpdateSelection(modifiedPolicyname);
+      UpdateUndoRedoButtons();
+    }
+    else if (originalPolicy != modifiedPolicy) {
+
+      m_PolicyManager->PolicyModified(
+        originalPolicyname.ToStdWstring(),
+        originalPolicy, modifiedPolicy
+      );
+
+      UpdateNames();
+      UpdateSelection(originalPolicyname);
+      UpdateUndoRedoButtons();
+    }
   }
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_DELETE
  */
 
-void CManagePasswordPolicies::OnDeleteClick( wxCommandEvent& event )
+void CManagePasswordPolicies::OnDeleteClick( wxCommandEvent& )
 {
-////@begin wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_DELETE in CManagePasswordPolicies.
-  // Before editing this code, remove the block markers.
-  event.Skip();
-////@end wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_DELETE in CManagePasswordPolicies.
-}
+  int row = GetSelectedRow();
 
+  if (row > 0) {
+    wxString policyname = m_PolicyNames->GetCellValue(row, 0);
+
+    m_PolicyManager->PolicyRemoved(policyname.ToStdWstring());
+
+    UpdateNames();
+    UpdateSelection(PolicyManager::GetDefaultPolicyName());
+    UpdateUndoRedoButtons();
+  }
+}
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_LIST
@@ -602,32 +712,27 @@ void CManagePasswordPolicies::OnListClick( wxCommandEvent&  )
     ShowPolicyDetails();
 }
 
-
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_UNDO
  */
 
-void CManagePasswordPolicies::OnUndoClick( wxCommandEvent& event )
+void CManagePasswordPolicies::OnUndoClick( wxCommandEvent& )
 {
-////@begin wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_UNDO in CManagePasswordPolicies.
-  // Before editing this code, remove the block markers.
-  event.Skip();
-////@end wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_UNDO in CManagePasswordPolicies.
+  m_PolicyManager->Undo();
+  UpdateUndoRedoButtons();
+  UpdateNames();
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_REDO
  */
 
-void CManagePasswordPolicies::OnRedoClick( wxCommandEvent& event )
+void CManagePasswordPolicies::OnRedoClick( wxCommandEvent& )
 {
-////@begin wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_REDO in CManagePasswordPolicies.
-  // Before editing this code, remove the block markers.
-  event.Skip();
-////@end wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_REDO in CManagePasswordPolicies.
+  m_PolicyManager->Redo();
+  UpdateUndoRedoButtons();
+  UpdateNames();
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_OK
@@ -640,9 +745,12 @@ void CManagePasswordPolicies::OnOkClick( wxCommandEvent& )
    * If anything has changed, we treat the change as atomic, creating a multicommand
    * s.t. Undo/Redo will work as expected.
    */
-  PWPolicy olddefpol(PWSprefs::GetInstance()->GetDefaultPolicy());
-  bool defChanged = (olddefpol != m_st_default_pp);
-  bool namedChanged = (m_MapPSWDPLC != m_core.GetPasswordPolicies());
+  const auto& olddefpol = PWSprefs::GetInstance()->GetDefaultPolicy();
+  const auto& newdefpol = m_PolicyManager->GetDefaultPolicy();
+  bool defChanged = (olddefpol != newdefpol);
+
+  auto policies = m_PolicyManager->GetPolicies();
+  bool namedChanged = (policies != m_core.GetPasswordPolicies());
 
   if (defChanged || namedChanged) {
     MultiCommands *pmulticmds = MultiCommands::Create(&m_core);
@@ -651,7 +759,7 @@ void CManagePasswordPolicies::OnOkClick( wxCommandEvent& )
       // User has changed database default policy - need to update preferences
       // Update the copy only!
       PWSprefs::GetInstance()->SetupCopyPrefs();
-      PWSprefs::GetInstance()->SetDefaultPolicy(m_st_default_pp, true);
+      PWSprefs::GetInstance()->SetDefaultPolicy(newdefpol, true);
 
       // Now get new DB preferences String value
       StringX sxNewDBPrefsString(PWSprefs::GetInstance()->Store(true));
@@ -662,14 +770,14 @@ void CManagePasswordPolicies::OnOkClick( wxCommandEvent& )
     } // defChanged
 
     if (namedChanged) {
-      pmulticmds->Add(DBPolicyNamesCommand::Create(&m_core, m_MapPSWDPLC,
+      pmulticmds->Add(DBPolicyNamesCommand::Create(&m_core, policies,
                                                    DBPolicyNamesCommand::NP_REPLACEALL));
     }
     m_core.Execute(pmulticmds);
   } // defChanged || namedChanged
+  m_bShowPolicyEntriesInitially = true;
   EndModal(wxID_OK);
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CANCEL
@@ -677,12 +785,13 @@ void CManagePasswordPolicies::OnOkClick( wxCommandEvent& )
 
 void CManagePasswordPolicies::OnCancelClick( wxCommandEvent& event )
 {
-////@begin wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CANCEL in CManagePasswordPolicies.
+  m_bShowPolicyEntriesInitially = true;
+
+  ////@begin wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CANCEL in CManagePasswordPolicies.
   // Before editing this code, remove the block markers.
   event.Skip();
 ////@end wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CANCEL in CManagePasswordPolicies.
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_HELP
@@ -695,7 +804,6 @@ void CManagePasswordPolicies::OnHelpClick( wxCommandEvent& event )
   event.Skip();
 ////@end wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_HELP in CManagePasswordPolicies.
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_GENERATE_PASSWORD
@@ -710,7 +818,6 @@ void CManagePasswordPolicies::OnGeneratePasswordClick( wxCommandEvent& event )
   m_passwordCtrl->SetValue(passwd.c_str());
 }
 
-
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_BITMAPBUTTON
  */
@@ -720,16 +827,87 @@ void CManagePasswordPolicies::OnCopyPasswordClick( wxCommandEvent& )
   PWSclipboard::GetInstance()->SetData(tostringx(m_passwordCtrl->GetValue()));
 }
 
-
 /*!
  * wxEVT_GRID_SELECT_CELL event handler for ID_POLICYLIST
  */
 
-void CManagePasswordPolicies::OnSelectCell( wxGridEvent& evt )
+void CManagePasswordPolicies::OnSelectCell( wxGridEvent& event )
 {
-  if (evt.GetEventObject() == m_PolicyNames) {
-    m_curPolRow = evt.GetRow();
-    UpdateDetails();
+  if (event.GetEventObject() == m_PolicyNames) {
+
+    auto cellValue = m_PolicyNames->GetCellValue(event.GetRow(), event.GetCol());
+
+    if (event.GetRow() == 0) { /* First row contains the default policy */
+
+      // Update button states
+      if (!m_core.IsReadOnly()) {
+        FindWindow(wxID_DELETE)->Enable(false);
+        FindWindow(ID_EDIT_PP)->Enable(true);
+      }
+
+      FindWindow(ID_LIST)->Enable(false);
+
+      // Update details of selected policy
+      m_curPolRow = event.GetRow();
+      UpdateDetails();
+      UpdateEntryList();
+    }
+    else if (cellValue.IsEmpty()) { /* Row with an empty cell */
+
+      // Update button states
+      if (!m_core.IsReadOnly()) {
+        FindWindow(wxID_DELETE)->Enable(false);
+        FindWindow(ID_EDIT_PP)->Enable(false);
+      }
+
+      FindWindow(ID_LIST)->Enable(false);
+
+      m_PolicyDetails->ClearGrid();
+      m_PolicyEntries->ClearGrid();
+
+      // Indicates to all other functions that no policy was selected (e.g. empty row)
+      m_curPolRow = -1;
+    }
+    else {
+
+      // Update button states
+      if (!m_core.IsReadOnly()) {
+        FindWindow(wxID_DELETE)->Enable(true);
+        FindWindow(ID_EDIT_PP)->Enable(true);
+      }
+
+      FindWindow(ID_LIST)->Enable(true);
+
+      // Update details of selected policy
+      m_curPolRow = event.GetRow();
+      UpdateDetails();
+      UpdateEntryList();
+    }
   }
 }
 
+/**
+ * Event handler (EVT_SIZE) that will be called when the window has been resized.
+ *
+ * @param event holds information about size change events.
+ * @see <a href="http://docs.wxwidgets.org/3.0/classwx_size_event.html">wxSizeEvent Class Reference</a>
+ */
+void CManagePasswordPolicies::OnSize(wxSizeEvent& event)
+{
+  ResizeGridColumns();
+
+  event.Skip();
+}
+
+/**
+ * Event handler (EVT_MAXIMIZE) that will be called when the window has been maximized.
+ *
+ * @param event holds information about size change events.
+ * @see <a href="http://docs.wxwidgets.org/3.0/classwx_maximize_event.html">wxMaximizeEvent Class Reference</a>
+ */
+void CManagePasswordPolicies::OnMaximize(wxMaximizeEvent& event)
+{
+  CallAfter(&CManagePasswordPolicies::ResizeGridColumns); // delayed execution of resizing, until dialog is completely layout
+
+  event.Skip();
+}

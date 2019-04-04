@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -15,16 +15,15 @@
 #ifndef _PASSWORDSAFEFRAME_H_
 #define _PASSWORDSAFEFRAME_H_
 
-
 /*!
  * Includes
  */
 
 ////@begin includes
-#include "wx/frame.h"
-#include "wx/statusbr.h"
+#include <wx/frame.h>
+#include <wx/statusbr.h>
 ////@end includes
-#include "wx/treebase.h" // for wxTreeItemId
+#include <wx/treebase.h> // for wxTreeItemId
 #include "core/PWScore.h"
 #include "core/UIinterface.h"
 #include "core/RUEList.h"
@@ -69,6 +68,7 @@ class PasswordSafeSearch;
 #define ID_EDIT 10024
 #define ID_RENAME 10025
 #define ID_DUPLICATEENTRY 10026
+#define ID_PROTECT 10134
 #define ID_ADDGROUP 10027
 #define ID_CLEARCLIPBOARD 10028
 #define ID_COPYPASSWORD 10029
@@ -105,6 +105,7 @@ class PasswordSafeSearch;
 #define ID_BACKUP 10058
 #define ID_RESTORE 10059
 #define ID_PWDPOLSM 10215
+#define ID_GENERATEPASSWORD 10330
 #define ID_YUBIKEY_MNG 10010
 #define ID_LANGUAGEMENU 10011
 #define ID_VISITWEBSITE 10012
@@ -120,6 +121,7 @@ enum {
   ID_EDITMENU_FIND_NEXT  = 10220,
   ID_EDITMENU_FIND_PREVIOUS,
   ID_PASSWORDSUBSET,
+  ID_PASSWORDQRCODE,
   ID_COPYEMAIL,
   ID_RUNCOMMAND,
   ID_COPYRUNCOMMAND,
@@ -138,6 +140,7 @@ enum {
   ID_TOOLBAR_NEW,
   ID_TOOLBAR_CLASSIC,
   ID_SYNCHRONIZE,
+  ID_LOCK_SAFE,
 
   // languages
   ID_LANGUAGE_BEGIN,
@@ -147,6 +150,7 @@ enum {
   ID_LANGUAGE_ENGLISH,
   ID_LANGUAGE_FRENCH,
   ID_LANGUAGE_GERMAN,
+  ID_LANGUAGE_HUNGARIAN,
   ID_LANGUAGE_ITALIAN,
   ID_LANGUAGE_KOREAN,
   ID_LANGUAGE_POLISH,
@@ -164,6 +168,9 @@ class PasswordSafeFrame: public wxFrame, public UIInterFace
 {
     DECLARE_CLASS( PasswordSafeFrame )
     DECLARE_EVENT_TABLE()
+
+private:
+    enum class ViewType { TREE, GRID } m_currentView;
 
 public:
     /// Constructors
@@ -188,18 +195,20 @@ public:
     // UIinterface concrete methods:
     virtual void DatabaseModified(bool bChanged);
 
-    virtual void GUISetupDisplayInfo(CItemData &ci);
-
     virtual void UpdateGUI(UpdateGUICommand::GUI_Action ga,
                            const pws_os::CUUID &entry_uuid,
-                           CItemData::FieldType ft = CItemData::START,
-                           bool bUpdateGUI = true);
+                           CItemData::FieldType ft = CItemData::START);
+    virtual void UpdateGUI(UpdateGUICommand::GUI_Action ga,
+                           const std::vector<StringX> &vGroups);
 
-    virtual void GUIRefreshEntry(const CItemData &ci);
+    virtual void GUIRefreshEntry(const CItemData &ci, bool bAllowFail = false);
 
     virtual void UpdateWizard(const stringT &s);
 
   ////@begin PasswordSafeFrame event handler declarations
+
+  /// wxEVT_CHAR_HOOK event handler for WXK_ESCAPE
+  void OnChar( wxKeyEvent& evt );
 
   /// wxEVT_CLOSE_WINDOW event handler for ID_PASSWORDSAFEFRAME
   void OnCloseWindow( wxCloseEvent& event );
@@ -233,6 +242,9 @@ public:
 
   /// wxEVT_COMMAND_MENU_SELECTED event handler for wxID_DELETE
   void OnDeleteClick( wxCommandEvent& event );
+
+  /// wxEVT_COMMAND_MENU_SELECTED event handler for ID_PROTECT
+  void OnProtectUnprotectClick( wxCommandEvent& event );
 
   /// wxEVT_COMMAND_MENU_SELECTED event handler for ID_CLEARCLIPBOARD
   void OnClearclipboardClick( wxCommandEvent& event );
@@ -275,6 +287,9 @@ public:
 
   /// wxEVT_COMMAND_MENU_SELECTED event handler for wxID_ABOUT
   void OnAboutClick( wxCommandEvent& evt);
+
+  /// wxEVT_COMMAND_MENU_SELECTED event handler for ID_GENERATE_PASSWORD
+  void OnGeneratePassword( wxCommandEvent& event );
 
 #ifndef NO_YUBI
   /// wxEVT_COMMAND_MENU_SELECTED event handler for ID_YUBIKEY_MNG
@@ -359,6 +374,9 @@ public:
   /// wxEVT_ICONIZE event handler
   void OnIconize(wxIconizeEvent& evt);
 
+  /// wxEVT_COMMAND_MENU_SELECTED event handler for ID_LOCK_SAFE
+  void OnLockSafe(wxCommandEvent& evt);
+
   /// wxEVT_COMMAND_MENU_SELECTED event handler for wxID_UNDO
   void OnUndo(wxCommandEvent& evt);
 
@@ -386,12 +404,15 @@ public:
 
   void OnBackupSafe(wxCommandEvent& evt);
   void OnRestoreSafe(wxCommandEvent& evt);
-  
+
   void OnVisitWebsite(wxCommandEvent&);
   
 #ifdef __WXOSX__
   void OnActivate(wxActivateEvent& event);
 #endif
+
+  void OnPasswordSubset(wxCommandEvent& evt);
+  void OnPasswordQRCode(wxCommandEvent& evt);
 
 ////@begin PasswordSafeFrame member function declarations
 
@@ -419,9 +440,12 @@ public:
   ItemListConstIter GetEntryIter() const {return m_core.GetEntryIter();}
   ItemListConstIter GetEntryEndIter() const {return m_core.GetEntryEndIter();}
 
-  void Execute(Command *pcmd, PWScore *pcore = NULL);
+  void Execute(Command *pcmd, PWScore *pcore = nullptr);
 
-  bool IsTreeView() const {return m_currentView == TREE;}
+  void SetViewType(const ViewType& view) { m_currentView = view; }
+  bool IsTreeView() const { return m_currentView == ViewType::TREE; }
+  bool IsGridView() const { return m_currentView == ViewType::GRID; }
+
   void RefreshViews();
   void FlattenTree(OrderedItemList& olist);
 
@@ -435,13 +459,12 @@ public:
   void UnlockSafe(bool restoreUI, bool iconizeOnFailure);
 
   /// Called by app when the inactivity timer arrives
+  void IconizeOrHideAndLock();
+
   void HideUI(bool lock);
 
   /// Called by system tray unlock the UI (and optionally restore the main window)
   void UnlockUI(bool restoreFrame);
-
-  /// Returns true if the user enters the correct safe combination and presses OK
-  bool VerifySafeCombination(StringX& password);
 
   void GetAllMenuItemStrings(std::vector<RUEntryData>& vec) const { m_RUEList.GetAllMenuItemStrings(vec); };
   void DeleteRUEntry(size_t index) { m_RUEList.DeleteRUEntry(index); }
@@ -452,11 +475,15 @@ public:
   void ViewReport(CReport& rpt);
 
   CItemData *GetSelectedEntry() const;
+  CItemData* GetBaseEntry(const CItemData *item) const;
+  CItemData *GetSelectedEntry(const wxCommandEvent& evt, CItemData &rueItem) const;
   wxString GetCurrentSafe() const { return towxstring(m_core.GetCurFile()); }
 
   void SetTrayStatus(bool locked);
   void SetTrayClosed();
   void ShowTrayIcon();
+
+  bool IsClosed() const;
 
   ////@begin PasswordSafeFrame member variables
   PWSGrid* m_grid;
@@ -464,8 +491,8 @@ public:
   CPWStatusBar* m_statusBar;
   ////@end PasswordSafeFrame member variables
  private:
-  enum SaveType {ST_INVALID = -1, ST_NORMALEXIT = 0,
-                 ST_ENDSESSIONEXIT, ST_WTSLOGOFFEXIT, ST_FAILSAFESAVE};
+  enum class SaveType { INVALID = -1, NORMALEXIT = 0, IMMEDIATELY, 
+                        ENDSESSIONEXIT, WTSLOGOFFEXIT, FAILSAFESAVE };
 
   //we need to restrict the size of individual text fields, to prevent creating
   //enormous databases.  See the comments in DboxMain.h
@@ -477,19 +504,17 @@ public:
   int Open(const wxString &fname); // prompt for password, try to Load.
   int SaveIfChanged();
   int SaveAs(void);
-  int Save(SaveType st = ST_INVALID);
+  int Save(SaveType savetype = SaveType::INVALID);
+  int SaveImmediately();
   void ShowGrid(bool show = true);
   void ShowTree(bool show = true);
-  void ClearData();
+  void ClearAppData();
   bool ReloadDatabase(const StringX& password);
-  bool SaveAndClearDatabase();
+  bool SaveAndClearDatabaseOnLock();
   void CleanupAfterReloadFailure(bool tellUser);
   Command *Delete(CItemData *pci);
   Command *Delete(wxTreeItemId tid); // for group delete
-  CItemData* GetBaseOfSelectedEntry(); //traverses to the base item if the selected item is a shortcut
   void UpdateAccessTime(CItemData &ci);
-  enum ChangeType {Clear, Data, TimeStamp, DBPrefs, ClearDBPrefs};
-  void SetChanged(ChangeType changed);
   void CreateMainToolbar();
   void ReCreateMainToolbar();
   void ReCreateDragToolbar();
@@ -501,7 +526,7 @@ public:
   void CreateDragBar();
   void RefreshToolbarButtons();
   PWSDragBar* GetDragBar();
-  bool IsClosed() const;
+  void CreateStatusBar();
   void SaveSettings() const;
   void LockDb();
   void TryIconize(int nAttempts = 5);
@@ -512,7 +537,7 @@ public:
                               const bool bTitleRenamed, wxString &timeStr,
                               const CItemData::EntryType et,
                               std::vector<StringX> &vs_added);
-  BOOL LaunchBrowser(const wxString &csURL, const StringX &sxAutotype,
+  bool LaunchBrowser(const wxString &csURL, const StringX &sxAutotype,
                      const std::vector<size_t> &vactionverboffsets, bool bDoAutotype);
 
   // Do* member functions for right-click and menu-accessible actions
@@ -528,6 +553,7 @@ public:
   void DoBrowse(CItemData &item, bool bAutotype);
   void DoRun(CItemData &item);
   void DoEmail(CItemData &item);
+  void DoPasswordSubset(CItemData &item);
 
   // These 3 fns are called via wxEvtHandler::CallAfter in sequence for autotyping
   void MinimizeOrHideBeforeAutotyping();
@@ -545,11 +571,12 @@ public:
   /// Update status bar - call when stuff changes:
   /// File open, double-click, modify, r-o r/w, filter...
   void UpdateStatusBar();
+  void UpdateMenuBar();
   PWScore &m_core;
-  enum {TREE, GRID} m_currentView;
   PasswordSafeSearch* m_search;
   SystemTray* m_sysTray;
   bool m_exitFromMenu;
+  bool m_bRestoredDBUnsaved;
   CRUEList m_RUEList;
   GUIInfo* m_guiInfo;
   bool m_bTSUpdated;
@@ -581,6 +608,8 @@ public:
   bool m_bShowExpiry, m_bShowUnsaved; // predefined filters
   bool m_bFilterActive;
   void ApplyFilters();
+
+  bool m_InitialTreeDisplayStatusAtOpen;
 };
 
 BEGIN_DECLARE_EVENT_TYPES()

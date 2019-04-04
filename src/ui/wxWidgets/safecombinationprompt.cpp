@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -10,14 +10,14 @@
 *
 */
 // For compilers that support precompilation, includes "wx/wx.h".
-#include "wx/wxprec.h"
+#include <wx/wxprec.h>
 
 #ifdef __BORLANDC__
 #pragma hdrstop
 #endif
 
 #ifndef WX_PRECOMP
-#include "wx/wx.h"
+#include <wx/wx.h>
 #endif
 
 ////@begin includes
@@ -40,13 +40,11 @@
 
 #include "./graphics/cpane.xpm"
 
-
 /*!
  * CSafeCombinationPrompt type definition
  */
 
 IMPLEMENT_CLASS( CSafeCombinationPrompt, wxDialog )
-
 
 /*!
  * CSafeCombinationPrompt event table definition
@@ -66,8 +64,9 @@ EVT_TIMER(POLLING_TIMER_ID, CSafeCombinationPrompt::OnPollingTimer)
 
   EVT_BUTTON( wxID_CANCEL, CSafeCombinationPrompt::OnCancelClick )
 
-END_EVENT_TABLE()
+  EVT_BUTTON( wxID_EXIT, CSafeCombinationPrompt::OnExitClick )
 
+END_EVENT_TABLE()
 
 /*!
  * CSafeCombinationPrompt constructors
@@ -83,7 +82,6 @@ CSafeCombinationPrompt::CSafeCombinationPrompt(wxWindow* parent, PWScore &core,
   Init();
   Create(parent, id, caption, pos, size, style);
 }
-
 
 /*!
  * CSafeCombinationPrompt creator
@@ -110,7 +108,6 @@ bool CSafeCombinationPrompt::Create( wxWindow* parent, wxWindowID id, const wxSt
   return true;
 }
 
-
 /*!
  * CSafeCombinationPrompt destructor
  */
@@ -124,7 +121,6 @@ CSafeCombinationPrompt::~CSafeCombinationPrompt()
 #endif
 }
 
-
 /*!
  * Member initialisation
  */
@@ -132,15 +128,14 @@ CSafeCombinationPrompt::~CSafeCombinationPrompt()
 void CSafeCombinationPrompt::Init()
 {
 ////@begin CSafeCombinationPrompt member initialisation
-  m_scctrl = NULL;
+  m_scctrl = nullptr;
 #ifndef NO_YUBI
-  m_YubiBtn = NULL;
-  m_yubiStatusCtrl = NULL;
+  m_YubiBtn = nullptr;
+  m_yubiStatusCtrl = nullptr;
 #endif
 
 ////@end CSafeCombinationPrompt member initialisation
 }
-
 
 /*!
  * Control creation for CSafeCombinationPrompt
@@ -155,9 +150,9 @@ void CSafeCombinationPrompt::CreateControls()
   itemDialog1->SetSizer(itemBoxSizer2);
 
   wxBoxSizer* itemBoxSizer3 = new wxBoxSizer(wxHORIZONTAL);
-  itemBoxSizer2->Add(itemBoxSizer3, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5);
+  itemBoxSizer2->Add(itemBoxSizer3, 1, wxALIGN_CENTER_HORIZONTAL|wxALL, 5);
 
-  wxStaticBitmap* itemStaticBitmap4 = new wxStaticBitmap( itemDialog1, wxID_STATIC, itemDialog1->GetBitmapResource(wxT("./graphics/cpane.xpm")), wxDefaultPosition, itemDialog1->ConvertDialogToPixels(wxSize(49, 46)), 0 );
+  wxStaticBitmap* itemStaticBitmap4 = new wxStaticBitmap( itemDialog1, wxID_STATIC, itemDialog1->GetBitmapResource(L"graphics/cpane.xpm"), wxDefaultPosition, itemDialog1->ConvertDialogToPixels(wxSize(49, 46)), 0 );
   itemBoxSizer3->Add(itemStaticBitmap4, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
   wxBoxSizer* itemBoxSizer5 = new wxBoxSizer(wxVERTICAL);
@@ -172,7 +167,7 @@ void CSafeCombinationPrompt::CreateControls()
   wxBoxSizer* itemBoxSizer8 = new wxBoxSizer(wxHORIZONTAL);
   itemBoxSizer5->Add(itemBoxSizer8, 0, wxGROW|wxALL, 5);
 
-  wxStaticText* itemStaticText9 = new wxStaticText( itemDialog1, wxID_STATIC, _("Safe\ncombination:"), wxDefaultPosition, wxDefaultSize, 0 );
+  wxStaticText* itemStaticText9 = new wxStaticText( itemDialog1, wxID_STATIC, _("Safe combination:"), wxDefaultPosition, wxDefaultSize, 0 );
   itemBoxSizer8->Add(itemStaticText9, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
   m_scctrl = new CSafeCombinationCtrl( itemDialog1, ID_PASSWORD, &m_password, wxDefaultPosition, wxSize(itemDialog1->ConvertDialogToPixels(wxSize(150, -1)).x, -1) );
@@ -193,20 +188,30 @@ void CSafeCombinationPrompt::CreateControls()
   itemBoxSizer11->Add(m_yubiStatusCtrl, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 #endif
 
-  wxStdDialogButtonSizer* itemStdDialogButtonSizer15 = new wxStdDialogButtonSizer;
+  auto itemBoxSizer4 = new wxBoxSizer(wxHORIZONTAL);
+  itemBoxSizer2->Add(itemBoxSizer4, 0, wxALIGN_BOTTOM|wxALL|wxEXPAND, 5);
 
-  itemBoxSizer2->Add(itemStdDialogButtonSizer15, 0, wxGROW|wxALL, 5);
-  wxButton* itemButton16 = new wxButton( itemDialog1, wxID_OK, _("&OK"), wxDefaultPosition, wxDefaultSize, 0 );
-  itemButton16->SetDefault();
-  itemStdDialogButtonSizer15->AddButton(itemButton16);
+  itemBoxSizer4->Add(
+    new wxButton(itemDialog1, wxID_HELP, _("&Help"), wxDefaultPosition, wxDefaultSize, 0), 
+    0, wxALIGN_CENTER_VERTICAL|wxALIGN_LEFT|wxALL, 5
+  );
 
-  wxButton* itemButton17 = new wxButton( itemDialog1, wxID_CANCEL, _("&Cancel"), wxDefaultPosition, wxDefaultSize, 0 );
-  itemStdDialogButtonSizer15->AddButton(itemButton17);
+  itemBoxSizer4->Add(
+    new wxButton(itemDialog1, wxID_EXIT, _("&Exit"), wxDefaultPosition, wxDefaultSize, 0), 
+    0, wxALIGN_CENTER_VERTICAL|wxALIGN_LEFT|wxALL, 5
+  );
 
-  wxButton* itemButton18 = new wxButton( itemDialog1, wxID_HELP, _("&Help"), wxDefaultPosition, wxDefaultSize, 0 );
-  itemStdDialogButtonSizer15->AddButton(itemButton18);
+  itemBoxSizer4->AddStretchSpacer();
 
-  itemStdDialogButtonSizer15->Realize();
+  itemBoxSizer4->Add(
+    new wxButton(itemDialog1, wxID_CANCEL, _("&Cancel"), wxDefaultPosition, wxDefaultSize, 0), 
+    0, wxALIGN_CENTER_VERTICAL|wxALIGN_RIGHT|wxALL, 5
+  );
+
+  itemBoxSizer4->Add(
+    new wxButton(itemDialog1, wxID_OK, _("&OK"), wxDefaultPosition, wxDefaultSize, 0), 
+    0, wxALIGN_CENTER_VERTICAL|wxALIGN_RIGHT|wxALL, 5
+  );
 
   // Set validators
   itemStaticText7->SetValidator( wxGenericValidator(& m_filename) );
@@ -216,7 +221,6 @@ void CSafeCombinationPrompt::CreateControls()
     passwdCtrl->SetFocus();
   }
 }
-
 
 /*!
  * Should we show tooltips?
@@ -235,7 +239,7 @@ wxBitmap CSafeCombinationPrompt::GetBitmapResource( const wxString& name )
 {
   // Bitmap retrieval
 ////@begin CSafeCombinationPrompt bitmap retrieval
-  if (name == _T("./graphics/cpane.xpm"))
+  if (name == L"graphics/cpane.xpm")
   {
     wxBitmap bitmap(cpane_xpm);
     return bitmap;
@@ -262,7 +266,6 @@ wxIcon CSafeCombinationPrompt::GetIconResource( const wxString& WXUNUSED(name) )
   return wxNullIcon;
 ////@end CSafeCombinationPrompt icon retrieval
 }
-
 
 void CSafeCombinationPrompt::ProcessPhrase()
 {
@@ -311,7 +314,6 @@ void CSafeCombinationPrompt::OnOkClick( wxCommandEvent& /* evt */ )
   }
 }
 
-
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CANCEL
  */
@@ -324,6 +326,17 @@ void CSafeCombinationPrompt::OnCancelClick( wxCommandEvent& /* evt */ )
 ////@end wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CANCEL in CSafeCombinationPrompt.
 }
 
+/*!
+ * wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_EXIT
+ */
+
+void CSafeCombinationPrompt::OnExitClick( wxCommandEvent& /* evt */ )
+{
+////@begin wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_EXIT in CSafeCombinationPrompt.
+  // Before editing this code, remove the block markers.
+  EndModal(wxID_EXIT);
+////@end wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CANCEL in CSafeCombinationPrompt.
+}
 
 #ifndef NO_YUBI
 /*!

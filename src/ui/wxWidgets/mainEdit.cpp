@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -36,6 +36,8 @@
 #include "createshortcutdlg.h"
 #include "wxutils.h"
 #include "guiinfo.h"
+#include "passwordsubset.h"
+#include "./pwsqrcodedlg.h"
 
 #include "../../core/PWSAuxParse.h"
 #include "../../core/Util.h"
@@ -62,7 +64,7 @@ using pws_os::CUUID;
 void PasswordSafeFrame::OnEditClick( wxCommandEvent& /* evt */ )
 {
   CItemData *item = GetSelectedEntry();
-  if (item != NULL)
+  if (item != nullptr)
     DoEdit(*item);
 }
 
@@ -72,7 +74,10 @@ void PasswordSafeFrame::DoEdit(CItemData item)
 {
   int rc = 0;
   if (!item.IsShortcut()) {
-    AddEditPropSheet editDbox(this, m_core, AddEditPropSheet::EDIT, &item, this);
+    bool read_only = m_core.IsReadOnly() || item.IsProtected();
+    AddEditPropSheet editDbox(this, m_core,
+                              read_only ? AddEditPropSheet::SheetType::VIEW : AddEditPropSheet::SheetType::EDIT,
+                              &item, this);
     rc = editDbox.ShowModal();
   } else {
     EditShortcut editDbox(this, m_core, &item);
@@ -83,21 +88,19 @@ void PasswordSafeFrame::DoEdit(CItemData item)
     item.GetUUID(uuid);
     //Find the item in the database, which might have been loaded afresh
     //after lock/unlock, so the old data structures are no longer valid
-    ItemListIter iter = m_core.Find(uuid);
+    auto iter = m_core.Find(uuid);
     if ( iter != m_core.GetEntryEndIter()) {
       CItemData& origItem = m_core.GetEntry(iter);
       //The Item is updated in DB by AddEditPropSheet
       UpdateAccessTime(origItem);
-      SetChanged(Data);
       UpdateSelChanged(&origItem);
+      UpdateStatusBar();
     }
     else {
       wxFAIL_MSG(wxT("Item being edited not found in currently loaded DB"));
     }
   }
 }
-
-
 
 /*!
  * wxEVT_COMMAND_MENU_SELECTED event handler for wxID_ADD
@@ -111,11 +114,11 @@ void PasswordSafeFrame::OnAddClick( wxCommandEvent& /* evt */ )
     selectedGroup = m_tree->GetItemGroup(selection);
   }
 
-  AddEditPropSheet addDbox(this, m_core, AddEditPropSheet::ADD, NULL, this, selectedGroup);
+  AddEditPropSheet addDbox(this, m_core, AddEditPropSheet::SheetType::ADD, nullptr, this, selectedGroup);
   if (addDbox.ShowModal() == wxID_OK) {
     const CItemData &item = addDbox.GetItem();
     m_core.Execute(AddEntryCommand::Create(&m_core, item, item.GetBaseUUID()));
-    SetChanged(Data);
+    UpdateStatusBar();
   }
 }
 
@@ -150,28 +153,28 @@ void PasswordSafeFrame::OnDeleteClick( wxCommandEvent& /* evt */ )
   }
 
   if (dodelete) {
-    Command *doit = NULL;
+    Command *doit = nullptr;
     CItemData *item = GetSelectedEntry();
-    if (item != NULL) {
+    if (item != nullptr) {
       doit = Delete(item);
     } else if (m_tree->GetSelection() != m_tree->GetRootItem()) {
       doit = Delete(m_tree->GetSelection());
     }
-    if (doit != NULL)
+    if (doit != nullptr)
       m_core.Execute(doit);
   } // dodelete
 }
 
 Command *PasswordSafeFrame::Delete(CItemData *pci)
 {
-  ASSERT(pci != NULL);
+  ASSERT(pci != nullptr);
   // ConfirmDelete asks for user confirmation
   // when deleting a shortcut or alias base.
   // Otherwise it just returns true
   if (m_core.ConfirmDelete(pci))
     return DeleteEntryCommand::Create(&m_core, *pci);
   else
-    return NULL;
+    return nullptr;
 }
 
 Command *PasswordSafeFrame::Delete(wxTreeItemId tid)
@@ -179,7 +182,7 @@ Command *PasswordSafeFrame::Delete(wxTreeItemId tid)
   // Called for deleting a group
   // Recursively build the appropriate multi-command
 
-  if (!tid) return NULL;
+  if (!tid) return nullptr;
   MultiCommands *retval = MultiCommands::Create(&m_core);
   if (m_tree->GetChildrenCount(tid) > 0) {
     wxTreeItemIdValue cookie;
@@ -187,7 +190,7 @@ Command *PasswordSafeFrame::Delete(wxTreeItemId tid)
 
     while (ti.IsOk()) {
       Command *delCmd = Delete(ti);
-      if (delCmd != NULL)
+      if (delCmd != nullptr)
         retval->Add(delCmd);
       ti = m_tree->GetNextChild(tid, cookie);
     } // while children
@@ -202,9 +205,9 @@ Command *PasswordSafeFrame::Delete(wxTreeItemId tid)
     }
   } else { // leaf
     CItemData *leaf = m_tree->GetItem(tid);
-    if (leaf != NULL) {
+    if (leaf != nullptr) {
       Command *delLeafCmd = Delete(leaf); // gets user conf. if needed
-      if (delLeafCmd != NULL)
+      if (delLeafCmd != nullptr)
         retval->Add(delLeafCmd);
     }
     else {
@@ -216,10 +219,10 @@ Command *PasswordSafeFrame::Delete(wxTreeItemId tid)
     }
   }
 
-  // If MultiCommands is empty, delete and return NULL
+  // If MultiCommands is empty, delete and return nullptr
   if (retval->GetSize() == 0) {
     delete retval;
-    retval = NULL;
+    retval = nullptr;
   }
   return retval;
 }
@@ -251,16 +254,14 @@ void PasswordSafeFrame::OnFindPrevious( wxCommandEvent& /* evt */ )
   m_search->FindPrevious();
 }
 
-
 /*!
  * wxEVT_COMMAND_MENU_SELECTED event handler for ID_CLEARCLIPBOARD
  */
 
 void PasswordSafeFrame::OnClearclipboardClick( wxCommandEvent& /* evt */ )
 {
-  PWSclipboard::GetInstance()->ClearData();
+  PWSclipboard::GetInstance()->ClearCBData();
 }
-
 
 /*!
  * wxEVT_COMMAND_MENU_SELECTED event handler for ID_COPYPASSWORD
@@ -269,8 +270,8 @@ void PasswordSafeFrame::OnClearclipboardClick( wxCommandEvent& /* evt */ )
 void PasswordSafeFrame::OnCopypasswordClick(wxCommandEvent& evt)
 {
   CItemData rueItem;
-  CItemData* item = IsRUEEvent(evt)? (m_RUEList.GetPWEntry(GetEventRUEIndex(evt), rueItem)? &rueItem: NULL) : GetSelectedEntry();
-  if (item != NULL)
+  CItemData* item = GetSelectedEntry(evt, rueItem);
+  if (item != nullptr)
     DoCopyPassword(*item);
 }
 
@@ -293,8 +294,8 @@ void PasswordSafeFrame::DoCopyPassword(CItemData &item)
 void PasswordSafeFrame::OnCopyRunCmd(wxCommandEvent& evt)
 {
   CItemData rueItem;
-  CItemData* item = IsRUEEvent(evt)? (m_RUEList.GetPWEntry(GetEventRUEIndex(evt), rueItem)? &rueItem: NULL) : GetSelectedEntry();
-  if (item != NULL)
+  CItemData* item = GetSelectedEntry(evt, rueItem);
+  if (item != nullptr)
     DoCopyRunCmd(*item);
 }
 
@@ -304,8 +305,6 @@ void PasswordSafeFrame::DoCopyRunCmd(CItemData &item)
   UpdateAccessTime(item);
 }
 
-
-
 /*!
  * wxEVT_COMMAND_MENU_SELECTED event handler for ID_COPYUSERNAME
  */
@@ -313,8 +312,8 @@ void PasswordSafeFrame::DoCopyRunCmd(CItemData &item)
 void PasswordSafeFrame::OnCopyusernameClick(wxCommandEvent& evt)
 {
   CItemData rueItem;
-  CItemData* item = IsRUEEvent(evt)? (m_RUEList.GetPWEntry(GetEventRUEIndex(evt), rueItem)? &rueItem: NULL) : GetSelectedEntry();
-  if (item != NULL)
+  CItemData* item = GetSelectedEntry(evt, rueItem);
+  if (item != nullptr)
     DoCopyUsername(*item);
 }
 
@@ -324,7 +323,6 @@ void PasswordSafeFrame::DoCopyUsername(CItemData &item)
   UpdateAccessTime(item);
 }
 
-
 /*!
  * wxEVT_COMMAND_MENU_SELECTED event handler for ID_COPYNOTESFLD
  */
@@ -332,8 +330,8 @@ void PasswordSafeFrame::DoCopyUsername(CItemData &item)
 void PasswordSafeFrame::OnCopynotesfldClick(wxCommandEvent& evt)
 {
   CItemData rueItem;
-  CItemData* item = IsRUEEvent(evt)? (m_RUEList.GetPWEntry(GetEventRUEIndex(evt), rueItem)? &rueItem: NULL) : GetSelectedEntry();
-  if (item != NULL)
+  CItemData* item = GetSelectedEntry(evt, rueItem);
+  if (item != nullptr)
     DoCopyNotes(*item);
 }
 
@@ -343,7 +341,6 @@ void PasswordSafeFrame::DoCopyNotes(CItemData &item)
   UpdateAccessTime(item);
 }
 
-
 /*!
  * wxEVT_COMMAND_MENU_SELECTED event handler for ID_COPYURL
  */
@@ -351,8 +348,8 @@ void PasswordSafeFrame::DoCopyNotes(CItemData &item)
 void PasswordSafeFrame::OnCopyurlClick(wxCommandEvent& evt)
 {
   CItemData rueItem;
-  CItemData* item = IsRUEEvent(evt)? (m_RUEList.GetPWEntry(GetEventRUEIndex(evt), rueItem)? &rueItem: NULL) : GetSelectedEntry();
-  if (item != NULL)
+  CItemData* item = GetSelectedEntry(evt, rueItem);
+  if (item != nullptr)
     DoCopyURL(*item);
 }
 
@@ -363,8 +360,8 @@ void PasswordSafeFrame::OnCopyurlClick(wxCommandEvent& evt)
 void PasswordSafeFrame::OnCopyEmailClick(wxCommandEvent& evt)
 {
   CItemData rueItem;
-  CItemData* item = IsRUEEvent(evt)? (m_RUEList.GetPWEntry(GetEventRUEIndex(evt), rueItem)? &rueItem: NULL) : GetSelectedEntry();
-  if (item != NULL)
+  CItemData* item = GetSelectedEntry(evt, rueItem);
+  if (item != nullptr)
     DoCopyEmail(*item);
 }
 
@@ -381,7 +378,7 @@ void PasswordSafeFrame::OnCreateShortcut(wxCommandEvent& WXUNUSED(event))
     if (rc == wxID_OK) {
       UpdateAccessTime(*item);
       Show(true);
-      SetChanged(Data);
+      UpdateStatusBar();
     }
   }
 }
@@ -393,9 +390,9 @@ void PasswordSafeFrame::OnDuplicateEntry(wxCommandEvent& WXUNUSED(event))
     return;
 //  if (SelItemOk() == TRUE) {
     CItemData *pci = GetSelectedEntry();
-    ASSERT(pci != NULL);
+    ASSERT(pci != nullptr);
 //    DisplayInfo *pdi = (DisplayInfo *)pci->GetDisplayInfo();
-//    ASSERT(pdi != NULL);
+//    ASSERT(pdi != nullptr);
 
     // Get information from current selected entry
     const StringX ci2_group = pci->GetGroup();
@@ -417,14 +414,13 @@ void PasswordSafeFrame::OnDuplicateEntry(wxCommandEvent& WXUNUSED(event))
 
     // Set up new entry
     CItemData ci2(*pci);
-    ci2.SetDisplayInfo(NULL);
     ci2.CreateUUID();
     ci2.SetGroup(ci2_group);
     ci2.SetTitle(ci2_title);
     ci2.SetUser(ci2_user);
     ci2.SetStatus(CItemData::ES_ADDED);
 
-    Command *pcmd = NULL;
+    Command *pcmd = nullptr;
     if (pci->IsDependent()) {
       if (pci->IsAlias()) {
         ci2.SetAlias();
@@ -433,7 +429,7 @@ void PasswordSafeFrame::OnDuplicateEntry(wxCommandEvent& WXUNUSED(event))
       }
 
       const CItemData *pbci = m_core.GetBaseEntry(pci);
-      if (pbci != NULL) {
+      if (pbci != nullptr) {
         StringX cs_tmp;
         cs_tmp = wxT("[") +
           pbci->GetGroup() + wxT(":") +
@@ -452,12 +448,12 @@ void PasswordSafeFrame::OnDuplicateEntry(wxCommandEvent& WXUNUSED(event))
 //    pdi->list_index = -1; // so that InsertItemIntoGUITreeList will set new values
 
     CUUID uuid = ci2.GetUUID();
-    ItemListIter iter = m_core.Find(uuid);
+    auto iter = m_core.Find(uuid);
     ASSERT(iter != m_core.GetEntryEndIter());
     wxUnusedVar(iter); // used in assert only
 //    InsertItemIntoGUITreeList(m_core.GetEntry(iter));
 //    FixListIndexes();
-    SetChanged(Data);
+    UpdateStatusBar();
 
 //    int rc = SelectEntry(pdi->list_index);
 //    if (rc == 0) {
@@ -611,7 +607,7 @@ void PasswordSafeFrame::DoAutotype(const StringX& sx_autotype,
         case L'w':
         case L'W':
         {
-           if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), n - 1) ==
+           if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), (size_t)(n - 1)) ==
                vactionverboffsets.end()) {
              // Not in the list of found action verbs - treat as-is
              sxtmp += L'\\';
@@ -657,7 +653,7 @@ void PasswordSafeFrame::DoAutotype(const StringX& sx_autotype,
           break; // case 'd', 'w' & 'W'
         }
         case L'c':
-          if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), n - 1) ==
+          if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), (size_t)(n - 1)) ==
               vactionverboffsets.end()) {
             // Not in the list of found action verbs - treat as-is
             sxtmp += L'\\';
@@ -669,7 +665,7 @@ void PasswordSafeFrame::DoAutotype(const StringX& sx_autotype,
           break;
         case L'j':
         case L'k':
-          if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), n - 1) ==
+          if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), (size_t)(n - 1)) ==
               vactionverboffsets.end()) {
             // Not in the list of found action verbs - treat as-is
             sxtmp += L'\\';
@@ -680,7 +676,7 @@ void PasswordSafeFrame::DoAutotype(const StringX& sx_autotype,
           }
           break;
         case L'z':
-          if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), n - 1) ==
+          if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), (size_t)(n - 1)) ==
               vactionverboffsets.end()) {
             // Not in the list of found action verbs - treat as-is
             sxtmp += L'\\';
@@ -688,7 +684,7 @@ void PasswordSafeFrame::DoAutotype(const StringX& sx_autotype,
           }
           break;
         case L'b':
-          if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), n - 1) ==
+          if (std::find(vactionverboffsets.begin(), vactionverboffsets.end(), (size_t)(n - 1)) ==
               vactionverboffsets.end()) {
             // Not in the list of found action verbs - treat as-is
             sxtmp += L'\\';
@@ -718,7 +714,7 @@ void PasswordSafeFrame::DoBrowse(CItemData &item, bool bAutotype)
   StringX sx_pswd;
   if (pci->IsDependent()) {
     CItemData *pbci = m_core.GetBaseEntry(pci);
-    ASSERT(pbci != NULL);
+    ASSERT(pbci != nullptr);
     sx_pswd = pbci->GetPassword();
     if (pci->IsShortcut())
       pci = pbci;
@@ -740,7 +736,7 @@ void PasswordSafeFrame::DoBrowse(CItemData &item, bool bAutotype)
   }
 }
 
-BOOL PasswordSafeFrame::LaunchBrowser(const wxString &csURL, const StringX &/*sxAutotype*/,
+bool PasswordSafeFrame::LaunchBrowser(const wxString &csURL, const StringX &/*sxAutotype*/,
                              const std::vector<size_t> &/*vactionverboffsets*/,
                              bool /*bDoAutotype*/)
 {
@@ -818,7 +814,7 @@ BOOL PasswordSafeFrame::LaunchBrowser(const wxString &csURL, const StringX &/*sx
   if (!rc) {
     wxMessageBox(errMsg, wxTheApp->GetAppName(), wxOK|wxICON_STOP, this);
   }
-  return rc ? TRUE : FALSE;
+  return rc;
 }
 
 void PasswordSafeFrame::DoRun(CItemData& item)
@@ -840,6 +836,13 @@ void PasswordSafeFrame::DoEmail(CItemData& item )
   }
 }
 
+void PasswordSafeFrame::DoPasswordSubset(CItemData& item )
+{
+  CPasswordSubset psDlg(this, item.GetPassword());
+  psDlg.ShowModal();
+  UpdateAccessTime(item);
+}
+
 void PasswordSafeFrame::OnUndo(wxCommandEvent& evt)
 {
   UNREFERENCED_PARAMETER(evt);
@@ -852,4 +855,45 @@ void PasswordSafeFrame::OnRedo(wxCommandEvent& evt)
   UNREFERENCED_PARAMETER(evt);
 //  SaveGUIStatus();
   m_core.Redo();
+}
+
+void PasswordSafeFrame::OnPasswordSubset(wxCommandEvent &evt)
+{
+  CItemData rueItem;
+  CItemData* item = GetSelectedEntry(evt, rueItem);
+  if (item != nullptr)
+    DoPasswordSubset(*item);
+}
+
+void PasswordSafeFrame::OnPasswordQRCode(wxCommandEvent &evt)
+{
+  if ( /* constexpr */ HasQRCode() ) {
+    CItemData rueItem;
+    CItemData* item = GetSelectedEntry(evt, rueItem);
+    if (item != nullptr) {
+#ifndef NO_QR
+    PWSQRCodeDlg dlg(this, item->GetPassword(),
+              towxstring(CItemData::FieldName(CItem::PASSWORD)) + _T(" of ") +
+              towxstring(item->GetGroup()) +
+              _T('[') + towxstring(item->GetTitle()) + _T(']') +
+              _T(':') + towxstring(item->GetUser()));
+      dlg.ShowModal();
+#endif
+    }
+  }
+}
+
+/*!
+ * wxEVT_COMMAND_MENU_SELECTED event handler for ID_PROTECT
+ */
+
+void PasswordSafeFrame::OnProtectUnprotectClick( wxCommandEvent& event )
+{
+  CItemData *item = GetSelectedEntry();
+  if (item != nullptr) {
+    bool protect = event.IsChecked();
+    m_core.Execute(UpdateEntryCommand::Create(&m_core, *item,
+                                              CItemData::PROTECTED,
+                                              protect ? L"1" : L"0"));
+  }
 }

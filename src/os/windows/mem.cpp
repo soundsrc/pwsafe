@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -35,11 +35,11 @@ bool pws_os::mcryptProtect(void *p, size_t size)
   bool res = true;
   //CryptProtectMemory available only in Vista+, so we need to check and load it manually 
   HINSTANCE hCRYPT32 = HINSTANCE(pws_os::LoadLibrary(_T("crypt32.dll"),
-                                                     pws_os::LOAD_LIBRARY_SYS));
+                                                     pws_os::loadLibraryTypes::SYS));
   if (hCRYPT32) {
      LP_CryptProtectMemory protectPtr = (LP_CryptProtectMemory)GetProcAddress(hCRYPT32, "CryptProtectMemory");
      if (protectPtr)
-       res = (protectPtr(p, size, CRYPTPROTECTMEMORY_SAME_PROCESS) == TRUE);
+       res = (protectPtr(p, (DWORD)size, CRYPTPROTECTMEMORY_SAME_PROCESS) == TRUE);
      FreeLibrary(hCRYPT32);
   }
   return res;
@@ -51,12 +51,12 @@ bool pws_os::mcryptUnprotect(void *p, size_t size)
    bool res = true;
   //CryptProtectMemory available only in Vista+, so we need to check and load it manually 
    HINSTANCE hCRYPT32 = HINSTANCE(pws_os::LoadLibrary(_T("crypt32.dll"),
-                                                      pws_os::LOAD_LIBRARY_SYS));
+                                                      pws_os::loadLibraryTypes::SYS));
   if (hCRYPT32) {
      LP_CryptProtectMemory unprotectPtr =
        LP_CryptProtectMemory(pws_os::GetFunction(hCRYPT32, "CryptUnprotectMemory"));
      if (unprotectPtr)
-       res = (unprotectPtr(p, size, CRYPTPROTECTMEMORY_SAME_PROCESS) == TRUE);
+       res = (unprotectPtr(p, (DWORD)size, CRYPTPROTECTMEMORY_SAME_PROCESS) == TRUE);
      pws_os::FreeLibrary(hCRYPT32);
   }
   return res;

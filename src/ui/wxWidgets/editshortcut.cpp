@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -34,13 +34,11 @@
 ////@begin XPM images
 ////@end XPM images
 
-
 /*!
  * EditShortcut type definition
  */
 
 IMPLEMENT_CLASS( EditShortcut, wxDialog )
-
 
 /*!
  * EditShortcut event table definition
@@ -55,7 +53,6 @@ BEGIN_EVENT_TABLE( EditShortcut, wxDialog )
 
 END_EVENT_TABLE()
 
-
 /*!
  * EditShortcut constructors
  */
@@ -66,12 +63,11 @@ EditShortcut::EditShortcut(wxWindow* parent,
                            const wxPoint& pos, const wxSize& size, long style)
 : m_core(core), m_item(item), m_ui(dynamic_cast<UIInterFace *>(parent))
 {
-  ASSERT(m_item != NULL);
-  ASSERT(m_ui != NULL);
+  ASSERT(m_item != nullptr);
+  ASSERT(m_ui != nullptr);
   Init();
   Create(parent, id, caption, pos, size, style);
 }
-
 
 /*!
  * EditShortcut creator
@@ -98,7 +94,7 @@ void EditShortcut::ItemFieldsToDialog()
 {
   // Populate the combo box
   std::vector<stringT> aryGroups;
-  m_core.GetUniqueGroups(aryGroups);
+  m_core.GetAllGroups(aryGroups);
   for (size_t igrp = 0; igrp < aryGroups.size(); igrp++) {
     m_groupCtrl->Append(aryGroups[igrp].c_str());
   }
@@ -117,13 +113,12 @@ void EditShortcut::ItemFieldsToDialog()
   m_lastAccess = m_item->GetATimeL().c_str();
   m_lastAny = m_item->GetRMTimeL().c_str();
   const CItemData *base = m_core.GetBaseEntry(m_item);
-  if (base != NULL) {
+  if (base != nullptr) {
     m_lastChanged = base->GetRMTimeL().c_str();
   } else {
     m_lastChanged = _("Unknown"); // Internal error
   }
 }
-
 
 /*!
  * EditShortcut destructor
@@ -135,7 +130,6 @@ EditShortcut::~EditShortcut()
 ////@end EditShortcut destruction
 }
 
-
 /*!
  * Member initialisation
  */
@@ -143,10 +137,9 @@ EditShortcut::~EditShortcut()
 void EditShortcut::Init()
 {
 ////@begin EditShortcut member initialisation
-  m_groupCtrl = NULL;
+  m_groupCtrl = nullptr;
 ////@end EditShortcut member initialisation
 }
-
 
 /*!
  * Control creation for EditShortcut
@@ -240,7 +233,6 @@ void EditShortcut::CreateControls()
 ////@end EditShortcut content construction
 }
 
-
 /*!
  * Should we show tooltips?
  */
@@ -273,7 +265,6 @@ wxIcon EditShortcut::GetIconResource( const wxString& WXUNUSED(name) )
   return wxNullIcon;
 ////@end EditShortcut icon retrieval
 }
-
 
 /*!
  * wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_OK
@@ -308,4 +299,3 @@ void EditShortcut::OnOkClick( wxCommandEvent& /* evt */ )
   }
   EndModal(wxID_OK);
 }
-

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -16,6 +16,7 @@
 
 #include "core/PwsPlatform.h"
 #include "core/PWSprefs.h"
+#include "core/SysInfo.h"
 
 #include "resource.h"
 #include "resource2.h"  // Menu, Toolbar & Accelerator resources
@@ -35,8 +36,6 @@ static char THIS_FILE[] = __FILE__;
 /////////////////////////////////////////////////////////////////////////////
 // COptionsSystem property page
 
-bool COptionsSystem::m_bShowConfigFile = false;
-
 IMPLEMENT_DYNAMIC(COptionsSystem, COptions_PropertyPage)
 
 COptionsSystem::COptionsSystem(CWnd *pParent, st_Opt_master_data *pOPTMD) 
@@ -46,10 +45,6 @@ COptionsSystem::COptionsSystem(CWnd *pParent, st_Opt_master_data *pOPTMD)
   m_DeleteRegistry(FALSE), m_saveDeleteRegistry(FALSE),
   m_Migrate2Appdata(FALSE), m_saveMigrate2Appdata(FALSE)
 {
-#ifdef _DEBUG
-  m_bShowConfigFile = true;
-#endif
-
   m_UseSystemTray = M_UseSystemTray();
   m_HideSystemTray = M_HideSystemTray();
   m_Startup = M_Startup();
@@ -78,6 +73,9 @@ void COptionsSystem::DoDataExchange(CDataExchange *pDX)
   DDX_Check(pDX, IDC_MIGRATETOAPPDATA, m_Migrate2Appdata);
   DDX_Check(pDX, IDC_DEFAULTOPENRO, m_DefaultOpenRO);
   DDX_Check(pDX, IDC_MULTIPLEINSTANCES, m_MultipleInstances);
+
+  DDX_Control(pDX, IDC_REGDELHELP, m_Help1);
+  DDX_Control(pDX, IDC_MIGRATETOAPPDATAHELP, m_Help2);
   //}}AFX_DATA_MAP
 }
 
@@ -97,39 +95,53 @@ END_MESSAGE_MAP()
 /////////////////////////////////////////////////////////////////////////////
 // COptionsSystem message handlers
 
-
 BOOL COptionsSystem::OnInitDialog() 
 {
   COptions_PropertyPage::OnInitDialog();
 
   PWSprefs *prefs = PWSprefs::GetInstance();
-  if (!m_bShowConfigFile) {
-    GetDlgItem(IDC_STATIC_CONFIGFILE)->ShowWindow(SW_HIDE);
-    GetDlgItem(IDC_STATIC_RWSTATUS)->ShowWindow(SW_HIDE);
-    GetDlgItem(IDC_CONFIGFILE)->ShowWindow(SW_HIDE);
-  } else {
-    PWSprefs::ConfigOption configoption;
-    std::wstring wsCF = prefs->GetConfigFile(configoption);
-    std::wstring wsCO(L"");
-    switch (configoption) {
-      case PWSprefs::CF_NONE:
-        LoadAString(wsCF, IDS_NONE);
-        break;
-      case PWSprefs::CF_REGISTRY:
-        LoadAString(wsCF, IDS_REGISTRY);
-        break;
-      case PWSprefs::CF_FILE_RO:
-        LoadAString(wsCO, IDS_READ_ONLY);
-        break;
-      case PWSprefs::CF_FILE_RW:
-      case PWSprefs::CF_FILE_RW_NEW:
-        LoadAString(wsCO, IDS_READ_WRITE);
-        break;
-      default:
-        ASSERT(0);
-    }
-    GetDlgItem(IDC_CONFIGFILE)->SetWindowText(wsCF.c_str());
-    GetDlgItem(IDC_STATIC_RWSTATUS)->SetWindowText(wsCO.c_str());
+
+  PWSprefs::ConfigOption configoption;
+  StringX sx_CF = prefs->GetConfigFile(configoption).c_str();
+  std::wstring  wsCO(L"");
+  switch (configoption) {
+    case PWSprefs::CF_NONE:
+      LoadAString(sx_CF, IDS_NONE);
+      break;
+    case PWSprefs::CF_REGISTRY:
+      LoadAString(sx_CF, IDS_REGISTRY);
+      break;
+    case PWSprefs::CF_FILE_RO:
+      LoadAString(wsCO, IDS_READ_ONLY);
+      break;
+    case PWSprefs::CF_FILE_RW:
+    case PWSprefs::CF_FILE_RW_NEW:
+      LoadAString(wsCO, IDS_READ_WRITE);
+      break;
+    default:
+      ASSERT(0);
+  }
+
+  CString cs_text;
+
+  // R/W status
+  GetDlgItem(IDC_STATIC_RWSTATUS)->SetWindowText(wsCO.c_str());
+
+  // Config file name & location
+  cs_text = PWSUtil::NormalizeTTT(sx_CF, 60).c_str();
+  GetDlgItem(IDC_CONFIGFILE)->SetWindowText(cs_text);
+
+  // Effective host & user used in config file
+  if (configoption == PWSprefs::CF_FILE_RO || 
+      configoption == PWSprefs::CF_FILE_RW ||
+      configoption == PWSprefs::CF_FILE_RW_NEW) {
+    stringT hn = SysInfo::GetInstance()->GetEffectiveHost();
+    PWSprefs::XMLify(charT('H'), hn);
+    stringT un = SysInfo::GetInstance()->GetEffectiveUser();
+    PWSprefs::XMLify(charT('u'), un);
+
+    cs_text.Format(IDS_HOSTUSER, static_cast<LPCWSTR>(hn.c_str()), static_cast<LPCWSTR>(un.c_str()));
+    GetDlgItem(IDC_STATIC_HOSTUSER)->SetWindowText(cs_text);
   }
 
   bool bofferdeleteregistry = prefs->OfferDeleteRegistry();
@@ -156,28 +168,45 @@ BOOL COptionsSystem::OnInitDialog()
   GetDlgItem(IDC_APPLYCONFIGCHANGES)->EnableWindow(FALSE);
 
   CSpinButtonCtrl *pspin = (CSpinButtonCtrl *)GetDlgItem(IDC_RESPIN);
-
   pspin->SetBuddy(GetDlgItem(IDC_MAXREITEMS));
-  pspin->SetRange(0, ID_TRAYRECENT_ENTRYMAX - ID_TRAYRECENT_ENTRY1 + 1);
+  pspin->SetRange(M_prefminREItems(), M_prefmaxREItems());
   pspin->SetBase(10);
   pspin->SetPos(m_MaxREItems);
 
   pspin = (CSpinButtonCtrl *)GetDlgItem(IDC_MRUSPIN);
-
   pspin->SetBuddy(GetDlgItem(IDC_MAXMRUITEMS));
-  pspin->SetRange(0, ID_FILE_MRU_ENTRYMAX - ID_FILE_MRU_ENTRY1 + 1);
+  pspin->SetRange(M_prefminMRU(), M_prefmaxMRU());
   pspin->SetBase(10);
   pspin->SetPos(m_MaxMRUItems);
 
   OnUseSystemTray();
 
-  InitToolTip(TTS_BALLOON | TTS_NOPREFIX, 2);
-  AddTool(IDC_REGDEL,           IDS_REGDEL);
-  AddTool(IDC_MIGRATETOAPPDATA, IDS_MIGRATETOAPPDATA);
-  ActivateToolTip();
+  if (InitToolTip(TTS_BALLOON | TTS_NOPREFIX, 0)) {
+    m_Help1.Init(IDB_QUESTIONMARK);
+    m_Help2.Init(IDB_QUESTIONMARK);
+
+    // Note naming convention: string IDS_xxx corresponds to control IDC_xxx_HELP
+    AddTool(IDC_REGDELHELP, IDS_REGDEL);
+    AddTool(IDC_MIGRATETOAPPDATAHELP, IDS_MIGRATETOAPPDATA);
+    ActivateToolTip();
+  } else {
+    m_Help1.EnableWindow(FALSE);
+    m_Help1.ShowWindow(SW_HIDE);
+    m_Help2.EnableWindow(FALSE);
+    m_Help2.ShowWindow(SW_HIDE);
+  }
+
+  if (!bofferdeleteregistry) {
+    m_Help1.EnableWindow(FALSE);
+    m_Help1.ShowWindow(SW_HIDE);
+  }
+
+  if (!boffermigrate2appdata) {
+    m_Help2.EnableWindow(FALSE);
+    m_Help2.ShowWindow(SW_HIDE);
+  }
 
   return TRUE;  // return TRUE unless you set the focus to a control
-  // EXCEPTION: OCX Property Pages should return FALSE
 }
 
 LRESULT COptionsSystem::OnQuerySiblings(WPARAM wParam, LPARAM )
@@ -226,7 +255,7 @@ BOOL COptionsSystem::OnApply()
   return COptions_PropertyPage::OnApply();
 }
 
-BOOL COptionsSystem::PreTranslateMessage(MSG* pMsg)
+BOOL COptionsSystem::PreTranslateMessage(MSG *pMsg)
 {
   RelayToolTipEvent(pMsg);
 

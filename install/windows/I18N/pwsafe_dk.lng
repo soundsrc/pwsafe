@@ -122,6 +122,7 @@ LangString KOREAN_SUPPORT ${LANG_DANISH} "en:Korean"
 LangString CZECH_SUPPORT ${LANG_DANISH} "en:Czech"
 LangString TURKISH_SUPPORT ${LANG_DANISH} "en:Turkish"
 LangString HUNGARIAN_SUPPORT ${LANG_DANISH} "en:Hungarian"
+LangString SLOVENIAN_SUPPORT ${LANG_DANISH} "en:Slovenian"
 
 ; LANG_SELECT "Please select the language for the installation"
 LangString LANG_SELECT ${LANG_DANISH} "Vælg venligst installations sprog"
@@ -140,6 +141,12 @@ LangString SORRY_NO_ME ${LANG_DANISH} "Beklager men, Windows ME er ikke længere 
 
 ; SORRY_NO_2K "Sorry, Windows 2000 is no longer supported. Try PasswordSafe 3.18"
 LangString SORRY_NO_2K ${LANG_DANISH} "Beklager men, Windows 2000 er ikke længere understøttet. Prøv PasswordSafe 3.18"
+
+; LangString Icon_description_Uninstall "Password Safe Uninstall"
+LangString Icon_description_Uninstall ${LANG_DANISH} "Password Safe Uninstall"
+
+; LangString Icon_description_Help  "Password Safe Help"
+LangString Icon_description_Help ${LANG_DANISH} "Password Safe Help"
 
 ;=================================================================
 ; End of pwsafe_dk.lng

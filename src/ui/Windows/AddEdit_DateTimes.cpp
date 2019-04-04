@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -28,9 +28,6 @@ using pws_os::CUUID;
 bool CAddEdit_DateTimes::m_bNumDaysFailed = false;
 bool CAddEdit_DateTimes::m_bShowUUID = false;
 
-// If no expiry set, this is what we offer:
-#define DEFAULT_EXP_INTERVAL 90
-
 static void AFXAPI DDV_CheckMaxDays(CDataExchange* pDX, const int &how,
                                     int &numDays, const int &maxDays);
 
@@ -43,7 +40,7 @@ CAddEdit_DateTimes::CAddEdit_DateTimes(CWnd *pParent, st_AE_master_data *pAEMD)
   : CAddEdit_PropertyPage(pParent, 
                           CAddEdit_DateTimes::IDD, CAddEdit_DateTimes::IDD_SHORT,
                           pAEMD),
-  m_how(NONE_EXP), m_numDays(DEFAULT_EXP_INTERVAL), m_inSetX(false),
+  m_how(NONE_EXP), m_numDays(PWSprefs::GetInstance()->GetPref(PWSprefs::DefaultExpiryDays)), m_inSetX(false),
   m_bRecurringPswdExpiry(FALSE), m_bInitdone(false)
 {
 #ifdef _DEBUG
@@ -108,7 +105,7 @@ static void AFXAPI DDV_CheckMaxDays(CDataExchange* pDX, const int &how,
   }
 }
 
-BOOL CAddEdit_DateTimes::PreTranslateMessage(MSG* pMsg)
+BOOL CAddEdit_DateTimes::PreTranslateMessage(MSG *pMsg)
 {
   if (pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_F1) {
     PostMessage(WM_COMMAND, MAKELONG(ID_HELP, BN_CLICKED), NULL);
@@ -209,7 +206,7 @@ BOOL CAddEdit_DateTimes::OnInitDialog()
   // Refresh dialog
   m_bInitdone = true;
   UpdateStats();
-  return TRUE;
+  return TRUE;  // return TRUE unless you set the focus to a control
 }
 
 BOOL CAddEdit_DateTimes::OnKillActive()
@@ -266,7 +263,7 @@ void CAddEdit_DateTimes::UpdateTimes()
   if (M_tttXTime() != (time_t)0) {
     xt = CTime(M_tttXTime());
   } else {
-    xt = now + CTimeSpan(DEFAULT_EXP_INTERVAL, 0, 1, 0);
+    xt = now + CTimeSpan(PWSprefs::GetInstance()->GetPref(PWSprefs::DefaultExpiryDays), 0, 1, 0);
   }
 
   const CTime sMinDate(xt.GetTime() < now.GetTime() ? xt : now);
@@ -283,7 +280,7 @@ void CAddEdit_DateTimes::UpdateTimes()
     if (xt > now) {
       m_numDays = int(CTimeSpan(xt - now).GetDays());
     } else
-      m_numDays = DEFAULT_EXP_INTERVAL;
+      m_numDays = PWSprefs::GetInstance()->GetPref(PWSprefs::DefaultExpiryDays);
   }
 
   GetDlgItem(IDC_STATIC_CURRENT_XTIME)->SetWindowText(M_locXTime());
@@ -362,7 +359,7 @@ BOOL CAddEdit_DateTimes::OnApply()
 void CAddEdit_DateTimes::OnDateTimeChanged(NMHDR *, LRESULT *pLResult)
 {
   *pLResult = 0;
-  if (!m_bInitdone || m_AEMD.uicaller != IDS_EDITENTRY || m_inSetX)
+  if (!m_bInitdone || M_uicaller() == IDS_VIEWENTRY || M_protected() != 0 || m_inSetX)
     return;
 
   SetXTime();
@@ -370,7 +367,7 @@ void CAddEdit_DateTimes::OnDateTimeChanged(NMHDR *, LRESULT *pLResult)
 
 void CAddEdit_DateTimes::OnDaysChanged()
 {
-  if (!m_bInitdone || m_AEMD.uicaller != IDS_EDITENTRY || m_inSetX)
+  if (!m_bInitdone || M_uicaller() == IDS_VIEWENTRY || M_protected() != 0 || m_inSetX)
     return;
 
   SetXTime();
@@ -397,6 +394,7 @@ void CAddEdit_DateTimes::OnHowChanged()
     GetDlgItem(IDC_STATIC_LTINTERVAL_NOW)->EnableWindow(FALSE);
     GetDlgItem(IDC_REUSE_ON_CHANGE)->EnableWindow(FALSE);
     GetDlgItem(IDC_EXPIRYDATE)->EnableWindow(FALSE);
+    GetDlgItem(IDC_EXPDAYSSPIN)->EnableWindow(FALSE);
     break;
   case ABSOLUTE_EXP:
     m_ae_psh->SetChanged(true);
@@ -405,20 +403,22 @@ void CAddEdit_DateTimes::OnHowChanged()
     GetDlgItem(IDC_STATIC_LTINTERVAL_NOW)->EnableWindow(FALSE);
     GetDlgItem(IDC_REUSE_ON_CHANGE)->EnableWindow(FALSE);
     GetDlgItem(IDC_EXPIRYDATE)->EnableWindow(TRUE);
+    GetDlgItem(IDC_EXPDAYSSPIN)->EnableWindow(FALSE);
     break;
   case RELATIVE_EXP:
     m_ae_psh->SetChanged(true);
     SetXTime();
-GetDlgItem(IDC_EXPDAYS)->EnableWindow(TRUE);
+    GetDlgItem(IDC_EXPDAYS)->EnableWindow(TRUE);
     GetDlgItem(IDC_STATIC_LTINTERVAL_NOW)->EnableWindow(TRUE);
     GetDlgItem(IDC_REUSE_ON_CHANGE)->EnableWindow(TRUE);
     GetDlgItem(IDC_EXPIRYDATE)->EnableWindow(FALSE);
+    GetDlgItem(IDC_EXPDAYSSPIN)->EnableWindow(TRUE);
     break;
   default:
     ASSERT(0);
   }
+  Invalidate();
 }
-
 
 void CAddEdit_DateTimes::SetXTime()
 {
@@ -457,12 +457,13 @@ void CAddEdit_DateTimes::OnRecurringPswdExpiry()
 
   m_ae_psh->SetChanged(true);
 
-  // If user chose "recurring", then set the max interval to ~10 years
+  // If user chose "recurring", then set the max interval to pref max (~10 years)
   // (should suffice for most purposes). For non-recurring, limit is
   // the max that won't overflow time_t
-  const int new_max = (m_bRecurringPswdExpiry == TRUE) ? 3650 : m_maxDays;
-  CSpinButtonCtrl* pspin = (CSpinButtonCtrl *)GetDlgItem(IDC_EXPDAYSSPIN);
-  pspin->SetRange32(1, new_max);
+  const int new_max = (m_bRecurringPswdExpiry == TRUE) ?
+    PWSprefs::GetInstance()->GetPrefMaxVal(PWSprefs::DefaultExpiryDays) : m_maxDays;
+  CSpinButtonCtrl *pspin = (CSpinButtonCtrl *)GetDlgItem(IDC_EXPDAYSSPIN);
+  pspin->SetRange32(PWSprefs::GetInstance()->GetPrefMinVal(PWSprefs::DefaultExpiryDays), new_max);
   if (m_numDays > new_max)
     m_numDays = 1;
 

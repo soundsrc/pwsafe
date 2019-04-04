@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -11,7 +11,6 @@
 
 #ifndef _PROPERTIES_H_
 #define _PROPERTIES_H_
-
 
 /*!
  * Includes
@@ -39,15 +38,21 @@
 #define wxID_DATABASEFORMAT 10066
 #define wxID_NUMGROUPS 10067
 #define wxID_NUMENTRIES 10068
+#define wxID_NUMATTACHMENTS 10300
 #define wxID_WHOLASTSAVED 10069
 #define wxID_WHENLASTSAVED 10070
 #define wxID_WHATLASTSAVED 10071
+#define wxID_PWDLASTCHANGED 10301
 #define wxID_FILEUUID 10072
 #define wxID_UNKNOWFIELDS 10073
+#define wxID_DBNAME 10302
+#define wxID_DBDESCRIPTION 10303
+#define wxID_CHANGE_NAME 10304
+#define wxID_CHANGE_DESCRIPTION 10305
 #if WXWIN_COMPATIBILITY_2_6
-#define SYMBOL_CPROPERTIES_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX|wxDIALOG_MODAL|wxTAB_TRAVERSAL
+#define SYMBOL_CPROPERTIES_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX|wxDIALOG_MODAL|wxTAB_TRAVERSAL|wxFULL_REPAINT_ON_RESIZE
 #else
-#define SYMBOL_CPROPERTIES_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX|wxTAB_TRAVERSAL
+#define SYMBOL_CPROPERTIES_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX|wxTAB_TRAVERSAL|wxFULL_REPAINT_ON_RESIZE
 #endif
 #define SYMBOL_CPROPERTIES_TITLE _("Properties")
 #define SYMBOL_CPROPERTIES_IDNAME ID_CPROPERTIES
@@ -55,13 +60,12 @@
 #define SYMBOL_CPROPERTIES_POSITION wxDefaultPosition
 ////@end control identifiers
 
-
 /*!
  * CProperties class declaration
  */
 
 class CProperties: public wxDialog
-{    
+{
   DECLARE_CLASS( CProperties )
   DECLARE_EVENT_TABLE()
 
@@ -89,7 +93,13 @@ public:
 ////@begin CProperties event handler declarations
 
   /// wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_OK
-  void OnOkClick( wxCommandEvent& evt);
+  void OnOkClick(wxCommandEvent& evt);
+
+  /// wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CHANGE_NAME
+  void OnEditName(wxCommandEvent& evt);
+
+  /// wxEVT_COMMAND_BUTTON_CLICKED event handler for wxID_CHANGE_DESCRIPTION
+  void OnEditDescription(wxCommandEvent& evt);
 
 ////@end CProperties event handler declarations
 
@@ -122,6 +132,12 @@ public:
   wxString GetUnknownfields() const { return m_unknownfields ; }
   void SetUnknownfields(wxString value) { m_unknownfields = value ; }
 
+  StringX GetNewDbName() const { return m_NewDbName; }
+  StringX GetNewDbDescription() const { return m_NewDbDescription; }
+
+  bool HasDbNameChanged() const { return m_NewDbName != m_core.GetHeader().m_DB_Name; }
+  bool HasDbDescriptionChanged() const { return m_NewDbDescription != m_core.GetHeader().m_DB_Description; }
+
   /// Retrieves bitmap resources
   wxBitmap GetBitmapResource( const wxString& name );
 
@@ -138,12 +154,18 @@ private:
   wxString m_databaseformat;
   wxString m_numgroups;
   wxString m_numentries;
+  wxString m_numattachments;
   wxString m_whenlastsaved;
   wxString m_wholastsaved;
   wxString m_whatlastsaved;
+  wxString m_whenpwdlastchanged;
   wxString m_file_uuid;
   wxString m_unknownfields;
+  wxString m_DbName;
+  wxString m_DbDescription;
 ////@end CProperties member variables
+  StringX m_NewDbName;
+  StringX m_NewDbDescription;
   const PWScore &m_core;
 };
 

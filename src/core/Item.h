@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -43,14 +43,6 @@
 
 class BlowFish;
 
-struct DisplayInfoBase
-{
-  // Following used by display methods of the GUI
-  DisplayInfoBase() {}
-  virtual ~DisplayInfoBase() {}
-  virtual DisplayInfoBase *clone() const = 0; // virtual c'tor idiom
-};
-
 class CItem
 {
 public:
@@ -70,7 +62,8 @@ public:
     XTIME = 0x0a,        // password e'X'piry time
     RESERVED = 0x0b      /* MUST NOT USE */,
     RMTIME = 0x0c,       // last 'R'ecord 'M'odification time
-    URL = 0x0d, AUTOTYPE = 0x0e,
+    URL = 0x0d,
+    AUTOTYPE = 0x0e,
     PWHIST = 0x0f,
     POLICY = 0x10,       // string encoding of item-specific password policy
     XTIME_INT = 0x11,
@@ -83,11 +76,14 @@ public:
     POLICYNAME = 0x18,   // named non-default password policy for item
     KBSHORTCUT = 0x19,   // Keyboard shortcuts
     ATTREF = 0x1a,       // UUID of attachment (v4)
+    LAST_USER_FIELD,     // All "user" fields MUST be before this for entry compare
+
     BASEUUID = 0x41,     // Base UUID of Alias or Shortcut (v4)
     ALIASUUID = 0x42,    // UUID indicates this is an Alias (v4)
     SHORTCUTUUID = 0x43, // UUID indicates this is a Shortcut (v4)
     LAST_DATA,           // Start of unknown fields!
     LAST_ITEM_DATA_FIELD = 0x5f, // beyond this is for other CItem subclasses
+
     START_ATT = 0x60,
     ATTUUID = 0x60,
     ATTTITLE = 0x61,
@@ -105,12 +101,19 @@ public:
     CONTENT = 0x73,
     CONTENTHMAC = 0x74,
     LAST_ATT,
+
     UNKNOWN_TESTING = 0xdf, // for testing forward compatability (unknown field handling)
     END = 0xff,
+
     // Internal fields only - used in filters
-    ENTRYSIZE = 0x100, ENTRYTYPE = 0x101, ENTRYSTATUS  = 0x102, PASSWORDLEN = 0x103,
+    ENTRYSIZE = 0x100,
+    ENTRYTYPE = 0x101,
+    ENTRYSTATUS  = 0x102,
+    PASSWORDLEN = 0x103,
+
     // 'UNKNOWNFIELDS' should be last
-    UNKNOWNFIELDS = 0x104
+    UNKNOWNFIELDS = 0x104,
+    LAST_FIELD
   };
 
   // Status returns from "ProcessInputRecordField"
@@ -130,17 +133,14 @@ public:
   CItem();
   CItem(const CItem& stuffhere);
 
-  ~CItem();
+  virtual ~CItem();
 
   void SetUnknownField(unsigned char type, size_t length,
                        const unsigned char *ufield);
   size_t NumberUnknownFields() const {return m_URFL.size();}
 
   CItem& operator=(const CItem& second);
-  // Following used by display methods - we just keep it handy
-  DisplayInfoBase *GetDisplayInfo() const {return m_display_info;}
-  void SetDisplayInfo(DisplayInfoBase *di) {delete m_display_info; m_display_info = di;}
-  void Clear();
+  virtual void Clear();
   void ClearField(int ft) {m_fields.erase(ft);}
 
   bool operator==(const CItem &that) const;
@@ -168,7 +168,7 @@ protected:
   StringX GetField(int ft) const;
   StringX GetField(const CItemField &field) const;
 
-  void SetTime(const int whichtime, time_t t);
+  void SetTime(int whichtime, time_t t);
   void GetTime(int whichtime, time_t &t) const;
 
   bool IsFieldSet(int ft) const {return m_fields.find(ft) != m_fields.end();}
@@ -193,9 +193,6 @@ private:
   // than the BlowFish object for copy c'tor and assignment
   unsigned char m_key[32];
   mutable BlowFish *m_blowfish = nullptr;
-
-  // Following used by display methods - we just keep it handy
-  DisplayInfoBase *m_display_info = nullptr;
 };
 
 #endif /* __ITEM_H */

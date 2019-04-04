@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -39,13 +39,11 @@
 ////@begin XPM images
 ////@end XPM images
 
-
 /*!
  * PWSGridTable type definition
  */
 
 IMPLEMENT_CLASS(PWSGridTable, wxGridTableBase)
-
 
 typedef StringX (CItemData::*ItemDataFuncT)() const;
 
@@ -98,7 +96,6 @@ PWSGridTable::~PWSGridTable()
 {
 }
 
-
 /*!
  * wxGridTableBase override implementations
  */
@@ -109,7 +106,6 @@ int PWSGridTable::GetNumberRows()
   assert(N <= size_t(std::numeric_limits<int>::max()));
   return int(N);
 }
-
 
 int PWSGridTable::GetNumberCols()
 {    
@@ -129,13 +125,12 @@ wxString PWSGridTable::GetColLabelValue(int col)
     towxstring(CItemData::FieldName(PWSGridCellData[col].ft)) : wxString();
 }
 
-
 wxString PWSGridTable::GetValue(int row, int col)
 {
   if (size_t(row) < m_pwsgrid->GetNumItems() &&
       size_t(col) < NumberOf(PWSGridCellData)) {
     const CItemData *pItem = m_pwsgrid->GetItem(row);
-    if (pItem != NULL) {
+    if (pItem != nullptr) {
       if (PWSGridCellData[col].ft != CItemData::POLICY) {
         return towxstring(pItem->GetFieldValue(PWSGridCellData[col].ft));
       } else {
@@ -185,7 +180,7 @@ void PWSGridTable::SetView(wxGrid* newGrid)
     }
   }
   else {
-    wxCHECK_RET(oldGrid, wxT("Both old and new grid views are NULL"));
+    wxCHECK_RET(oldGrid, wxT("Both old and new grid views are nullptr"));
     //This gridtable is about to be deleted.  Save current settings
     for (size_t idx = 0; idx < WXSIZEOF(PWSGridCellData); ++idx) {
 
@@ -202,7 +197,6 @@ void PWSGridTable::SetView(wxGrid* newGrid)
     }
   }
 }
-
 
 bool PWSGridTable::DeleteRows(size_t pos, size_t numRows)
 {
@@ -336,4 +330,3 @@ int PWSGridTable::GetNumHeaderCols()
   // as selected by user
   return NumberOf(PWSGridCellData);
 }
-

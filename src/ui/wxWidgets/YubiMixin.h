@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -25,7 +25,7 @@ class wxWindow;
 class CYubiMixin {
  public:
   enum {POLLING_INTERVAL = 500}; // mSec
- CYubiMixin() : m_present(false), m_btn(NULL), m_status(NULL) {}
+ CYubiMixin() : m_present(false), m_btn(nullptr), m_status(nullptr) {}
   ~CYubiMixin() {}
 
   void SetupMixin(wxWindow *btn, wxWindow *status);

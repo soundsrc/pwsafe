@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -77,7 +77,6 @@ void CItemAtt::CreateUUID()
   SetUUID(uuid);
 }
 
-
 void CItemAtt::SetUUID(const CUUID &uuid)
 {
   CItem::SetField(ATTUUID, static_cast<const unsigned char *>(*uuid.GetARep()), sizeof(uuid_array_t));
@@ -86,7 +85,7 @@ void CItemAtt::SetUUID(const CUUID &uuid)
 void CItemAtt::GetUUID(uuid_array_t &uuid_array) const
 {
   size_t length = sizeof(uuid_array_t);
-  FieldConstIter fiter = m_fields.find(ATTUUID);
+  auto fiter = m_fields.find(ATTUUID);
   if (fiter != m_fields.end()) {
     CItem::GetField(fiter->second,
                     static_cast<unsigned char *>(uuid_array), length);
@@ -152,7 +151,7 @@ size_t CItemAtt::GetContentSize() const
 
 bool CItemAtt::GetContent(unsigned char *content, size_t csize) const
 {
-  ASSERT(content != NULL);
+  ASSERT(content != nullptr);
 
   if (!HasContent() || csize < GetContentSize())
     return false;
@@ -175,9 +174,9 @@ int CItemAtt::Import(const stringT &fname)
   if (!fhandle)
     return PWScore::CANT_OPEN_FILE;
 
-  size_t flen = static_cast<size_t>(pws_os::fileLength(fhandle));
-  unsigned char *data = new unsigned char[flen];
-  if (data == NULL)
+  auto flen = static_cast<size_t>(pws_os::fileLength(fhandle));
+  auto *data = new unsigned char[flen];
+  if (data == nullptr)
     return PWScore::FAILURE;
 
   size_t nread = fread(data, flen, 1, fhandle);
@@ -237,8 +236,8 @@ int CItemAtt::Export(const stringT &fname) const
     return PWScore::CANT_OPEN_FILE;
 
   size_t flen = field.GetLength() + 8; // Add 8 for block size
-  unsigned char *value = new unsigned char[flen];
-  if (value == NULL) {
+  auto *value = new unsigned char[flen];
+  if (value == nullptr) {
     fclose(fhandle);
     return PWScore::FAILURE;
   }
@@ -261,11 +260,10 @@ int CItemAtt::Export(const stringT &fname) const
   return status;
 }
 
-
 bool CItemAtt::SetField(unsigned char type, const unsigned char *data,
                         size_t len)
 {
-  FieldType ft = static_cast<FieldType>(type);
+  auto ft = static_cast<FieldType>(type);
   switch (ft) {
   case ATTUUID:
     {
@@ -324,11 +322,11 @@ int CItemAtt::Read(PWSfile *in)
   unsigned char EK[PWSfileV4::KLEN] = {0};
   unsigned char AK[PWSfileV4::KLEN] = {0};
 
-  unsigned char *content = NULL;
+  unsigned char *content = nullptr;
   size_t content_len = 0;
   unsigned char expected_digest[SHA256::HASHLEN] = {0};
 
-  unsigned char *utf8 = NULL;
+  unsigned char *utf8 = nullptr;
   size_t utf8Len = 0;
 
   Clear();
@@ -386,8 +384,8 @@ int CItemAtt::Read(PWSfile *in)
         trashMemory(EK, sizeof(EK));
         const unsigned int BS = fish.GetBlockSize();
 
-        PWSfileV4 *in4 = dynamic_cast<PWSfileV4 *>(in);
-        ASSERT(in4 != NULL);
+        auto *in4 = dynamic_cast<PWSfileV4 *>(in);
+        ASSERT(in4 != nullptr);
         size_t nread = in4->ReadContent(&fish, IV, content, content_len);
         // nread should be content_len rounded up to nearest BS:
         ASSERT(nread == (content_len/BS + 1)*BS);
@@ -413,9 +411,9 @@ int CItemAtt::Read(PWSfile *in)
       } // switch {type)
     } // if (fieldLen > 0)
 
-    if (utf8 != NULL) {
+    if (utf8 != nullptr) {
       trashMemory(utf8, utf8Len * sizeof(utf8[0]));
-      delete[] utf8; utf8 = NULL; utf8Len = 0;
+      delete[] utf8; utf8 = nullptr; utf8Len = 0;
     }
   } while (type != END && fieldLen > 0 && --emergencyExit > 0);
 
@@ -433,7 +431,7 @@ int CItemAtt::Read(PWSfile *in)
     trashMemory(AK, sizeof(AK));
     
     // calculate HMAC
-    hmac.Update(content, content_len);
+    hmac.Update(content, (unsigned long)content_len);
     hmac.Final(calculated_digest);
 
     if (memcmp(expected_digest, calculated_digest,
@@ -453,6 +451,7 @@ int CItemAtt::Read(PWSfile *in)
   delete[] utf8; // if here via goto exit
 
   if (numread > 0) {
+    m_offset = in->GetOffset();
     return status;
   } else
     return PWSfile::READ_FAIL;
@@ -460,19 +459,19 @@ int CItemAtt::Read(PWSfile *in)
 
 size_t CItemAtt::WriteIfSet(FieldType ft, PWSfile *out, bool isUTF8) const
 {
-  FieldConstIter fiter = m_fields.find(ft);
+  auto fiter = m_fields.find(ft);
   size_t retval = 0;
   if (fiter != m_fields.end()) {
     const CItemField &field = fiter->second;
     ASSERT(!field.IsEmpty());
     size_t flength = field.GetLength() + BlowFish::BLOCKSIZE;
-    unsigned char *pdata = new unsigned char[flength];
+    auto *pdata = new unsigned char[flength];
     CItem::GetField(field, pdata, flength);
     if (isUTF8) {
       wchar_t *wpdata = reinterpret_cast<wchar_t *>(pdata);
       size_t srclen = field.GetLength()/sizeof(TCHAR);
       wpdata[srclen] = 0;
-      size_t dstlen = pws_os::wcstombs(NULL, 0, wpdata, srclen);
+      size_t dstlen = pws_os::wcstombs(nullptr, 0, wpdata, srclen);
       ASSERT(dstlen > 0);
 
       char *dst = new char[dstlen+1];
@@ -515,14 +514,14 @@ int CItemAtt::Write(PWSfile *out) const
   WriteIfSet(FILEMTIME, out, false);
   WriteIfSet(FILEATIME, out, false);
 
-  FieldConstIter fiter = m_fields.find(CONTENT);
+  auto fiter = m_fields.find(CONTENT);
   // XXX TBD - fail if no content, as this is a mandatory field
   if (fiter != m_fields.end()) {
-    PWSfileV4 *out4 = dynamic_cast<PWSfileV4 *>(out);
-    ASSERT(out4 != NULL);
+    auto *out4 = dynamic_cast<PWSfileV4 *>(out);
+    ASSERT(out4 != nullptr);
 
     size_t clength = fiter->second.GetLength() + BlowFish::BLOCKSIZE;
-    unsigned char *content = new unsigned char[clength];
+    auto *content = new unsigned char[clength];
     CItem::GetField(fiter->second, content, clength);
     out4->WriteContentFields(content, clength);
     trashMemory(content, clength);
@@ -543,7 +542,7 @@ bool CItemAtt::Matches(const stringT &stValue, int iObject,
   ASSERT(iFunction != 0); // must be positive or negative!
 
   StringX sx_Object;
-  FieldType ft = static_cast<FieldType>(iObject);
+  auto ft = static_cast<FieldType>(iObject);
   switch (ft) {
     case AT_TITLE:
     case AT_FILENAME:

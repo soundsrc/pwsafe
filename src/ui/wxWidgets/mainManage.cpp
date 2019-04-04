@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -29,6 +29,7 @@
 #include "optionspropsheet.h"
 #include "SystemTray.h"
 #include "ManagePwdPolicies.h"
+#include "PasswordPolicy.h"
 #ifndef NO_YUBI
 #include "yubicfg.h"
 #endif
@@ -46,17 +47,19 @@ void PasswordSafeFrame::OnPreferencesClick( wxCommandEvent& /* evt */ )
 {
   PWSprefs* prefs = PWSprefs::GetInstance();
   const StringX sxOldDBPrefsString(prefs->Store());
-  COptions *window = new COptions(this);
+  COptions *window = new COptions(this, m_core);
   if (window->ShowModal() == wxID_OK) {
     StringX sxNewDBPrefsString(prefs->Store(true));
     // Update system tray icon if visible so changes show up immediately
     if (m_sysTray && prefs->GetPref(PWSprefs::UseSystemTray))
         m_sysTray->ShowIcon();
 
-    if (!m_core.GetCurFile().empty() && !m_core.IsReadOnly() &&
-        m_core.GetReadFileVersion() == PWSfile::VCURRENT) {
-      if (sxOldDBPrefsString != sxNewDBPrefsString) {
-        Command *pcmd = DBPrefsCommand::Create(&m_core, sxNewDBPrefsString);
+    if (m_core.IsDbOpen() && !m_core.IsReadOnly() &&
+        m_core.GetReadFileVersion() >= PWSfile::V30) { // older versions don't have prefs
+      if (sxOldDBPrefsString != sxNewDBPrefsString ||
+          m_core.GetHashIters() != window->GetHashItersValue()) {
+        Command *pcmd = DBPrefsCommand::Create(&m_core, sxNewDBPrefsString,
+                                               window->GetHashItersValue());
         if (pcmd) {
             //I don't know why notifications should ever be suspended, but that's how
             //things were before I messed with them, so I want to limit the damage by
@@ -82,10 +85,10 @@ void PasswordSafeFrame::OnBackupSafe(wxCommandEvent& /*evt*/)
   const wxString title(_("Please Choose a Name for this Backup:"));
 
   wxString dir;
-  if (m_core.GetCurFile().empty())
+  if (!m_core.IsDbOpen())
     dir = towxstring(PWSdirs::GetSafeDir());
   else {
-    wxFileName::SplitPath(towxstring(m_core.GetCurFile()), &dir, NULL, NULL);
+    wxFileName::SplitPath(towxstring(m_core.GetCurFile()), &dir, nullptr, nullptr);
     wxCHECK_RET(!dir.IsEmpty(), _("Could not parse current file path"));
   }
 
@@ -136,19 +139,19 @@ void PasswordSafeFrame::OnRestoreSafe(wxCommandEvent& /*evt*/)
   const wxFileName currbackup(towxstring(PWSprefs::GetInstance()->GetPref(PWSprefs::CurrentBackup)));
 
   wxString dir;
-  if (m_core.GetCurFile().empty())
+  if (!m_core.IsDbOpen())
     dir = towxstring(PWSdirs::GetSafeDir());
   else {
-    wxFileName::SplitPath(towxstring(m_core.GetCurFile()), &dir, NULL, NULL);
+    wxFileName::SplitPath(towxstring(m_core.GetCurFile()), &dir, nullptr, nullptr);
     wxCHECK_RET(!dir.IsEmpty(), _("Could not parse current file path"));
   }
 
   //returns empty string if user cancels
-  wxString wxbf = wxFileSelector(_("Please Choose a Backup to restore:"),
+  wxString wxbf = wxFileSelector(_("Please Choose a Backup to Restore:"),
                                  dir,
                                  currbackup.GetFullName(),
                                  wxT("bak"),
-                                 _("Password Safe Backups (*.bak)|*.bak"),
+                                 _("Password Safe Backups (*.bak)|*.bak|Password Safe Intermediate Backups (*.ibak)|*.ibak||"),
                                  wxFD_OPEN|wxFD_FILE_MUST_EXIST,
                                  this);
   if (wxbf.empty())
@@ -168,12 +171,13 @@ void PasswordSafeFrame::OnRestoreSafe(wxCommandEvent& /*evt*/)
   if (pwdprompt.ShowModal() == wxID_OK) {
     const StringX passkey = pwdprompt.GetPassword();
     // unlock the file we're leaving
-    if (!m_core.GetCurFile().empty()) {
-      m_core.UnlockFile(m_core.GetCurFile().c_str());
-    }
+    m_core.SafeUnlockCurFile();
 
-    // clear the data before restoring
-    ClearData();
+    // Reset core and clear ALL associated data
+    m_core.ReInit();
+
+    // clear the application data before restoring
+    ClearAppData();
 
     if (m_core.ReadFile(tostringx(wxbf), passkey, true, MAXTEXTCHARS) == PWScore::CANT_OPEN_FILE) {
       wxMessageBox(wxbf << wxT("\n\n") << _("Could not open file for reading!"),
@@ -182,7 +186,7 @@ void PasswordSafeFrame::OnRestoreSafe(wxCommandEvent& /*evt*/)
     }
 
     m_core.SetCurFile(wxEmptyString);    // Force a Save As...
-    m_core.SetDBChanged(true); // So that the restored file will be saved
+    m_bRestoredDBUnsaved = true; // So that the restored file will be saved
 
     SetTitle(_("Password Safe - <Untitled Restored Backup>"));
 
@@ -198,7 +202,6 @@ void PasswordSafeFrame::OnRestoreSafe(wxCommandEvent& /*evt*/)
   }
 }
 
-
 /*!
  * wxEVT_COMMAND_MENU_SELECTED event handler for ID_PWDPOLSM
  */
@@ -207,6 +210,25 @@ void PasswordSafeFrame::OnPwdPolsMClick( wxCommandEvent&  )
 {
   CManagePasswordPolicies ppols(this, m_core);
   ppols.ShowModal();
+}
+
+/*!
+ * wxEVT_COMMAND_MENU_SELECTED event handler for ID_GENERATE_PASSWORD
+ */
+
+void PasswordSafeFrame::OnGeneratePassword(wxCommandEvent& WXUNUSED(event))
+{
+  PolicyManager policyManager(m_core);
+  auto customPolicies = policyManager.GetPolicies();
+  auto defaultPolicy  = policyManager.GetDefaultPolicy();
+  auto defaultName    = policyManager.GetDefaultPolicyName();
+
+  customPolicies[std2stringx(defaultName)] = defaultPolicy;
+
+  CPasswordPolicy ppdlg(this, m_core, customPolicies, CPasswordPolicy::DialogType::GENERATOR);
+  ppdlg.SetPolicyData(defaultName, defaultPolicy);
+
+  ppdlg.ShowModal();
 }
 
 #ifndef NO_YUBI

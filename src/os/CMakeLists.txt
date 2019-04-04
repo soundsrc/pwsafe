@@ -34,6 +34,7 @@ if (NOT NO_YUBI)
 endif ()
   elseif (APPLE)
   set (OS_SRCS
+    mac/cleanup.cpp
     mac/debug.cpp
     mac/dir.cpp
     mac/env.cpp
@@ -52,14 +53,16 @@ endif ()
     mac/UUID.cpp
     mac/media.cpp
     )
-  elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  elseif (${CMAKE_SYSTEM_NAME} MATCHES "(Linux|FreeBSD)")
   set (OS_SRCS
     unix/KeySend.cpp
     unix/UUID.cpp
+    unix/cleanup.cpp
     unix/debug.cpp
     unix/dir.cpp
     unix/env.cpp
     unix/file.cpp
+    unix/keyname.cpp
     unix/logit.cpp
     unix/media.cpp
     unix/mem.cpp

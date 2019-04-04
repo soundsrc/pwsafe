@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -30,7 +30,6 @@ struct RUEntryData {
   CItemData *pci;
 };
 
-
 // private struct: one of these for each owner-draw menu item
 struct CRUEItemData {
   unsigned long magicNum;      // magic number identifying me
@@ -50,16 +49,17 @@ class CRUEList
 public:
   // Construction/Destruction/operators
   CRUEList(PWScore &core) : m_core(core), m_maxentries(0) {}
+  CRUEList(const CRUEList &other) = delete;
   ~CRUEList() {}
 
-  CRUEList& operator=(const CRUEList& second);
+  CRUEList& operator=(const CRUEList& second) = delete;
 
   // Data retrieval
   size_t GetCount() const {return m_RUEList.size();}
   bool IsEmpty() const {return m_RUEList.empty();}
   size_t GetMax() const {return m_maxentries;}
   bool GetAllMenuItemStrings(std::vector<RUEntryData> &) const;
-  bool GetPWEntry(size_t, CItemData &); // NOT const!
+  bool GetPWEntry(size_t, CItemData &) const; // "logically" const!
   void GetRUEList(UUIDList &RUElist) const;
 
   // Data setting

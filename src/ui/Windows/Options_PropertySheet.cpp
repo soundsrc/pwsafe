@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -16,7 +16,7 @@
 IMPLEMENT_DYNAMIC(COptions_PropertySheet, CPWPropertySheet)
 
 COptions_PropertySheet::COptions_PropertySheet(UINT nID, CWnd* pParent,
-                                               const bool bLongPPs)
+  const bool bLongPPs)
   : CPWPropertySheet(nID, pParent, bLongPPs),
   m_save_bSymbols(L""), m_save_iUseOwnSymbols(DEFAULT_SYMBOLS),
   m_save_iPreExpiryWarnDays(0),
@@ -26,7 +26,7 @@ COptions_PropertySheet::COptions_PropertySheet(UINT nID, CWnd* pParent,
   m_save_bShowUsernameInTree(FALSE), m_save_bShowPasswordInTree(FALSE), 
   m_save_bExplorerTypeTree(FALSE), m_save_bPreExpiryWarn(FALSE),
   m_save_bLockOnWindowLock(FALSE), m_bStartupShortcutExists(FALSE),
-  m_save_bHighlightChanges(FALSE),
+  m_save_bSaveImmediately(TRUE), m_save_bHighlightChanges(FALSE),
   m_pp_backup(NULL), m_pp_display(NULL), m_pp_misc(NULL),
   m_pp_passwordhistory(NULL), m_pp_security(NULL),
   m_pp_shortcuts(NULL), m_pp_system(NULL)
@@ -94,7 +94,7 @@ BOOL COptions_PropertySheet::OnCommand(WPARAM wParam, LPARAM lParam)
                 (WPARAM)CPWPropertyPage::PP_UPDATE_VARIABLES, 0L) != 0)
       return TRUE;
 
-    // Now update preferences as per user's wishes
+    // Now update a copy of the preferences as per user's wishes
     UpdateCopyPreferences();
 
     // Now end it all so that OnApply isn't called again
@@ -104,7 +104,7 @@ BOOL COptions_PropertySheet::OnCommand(WPARAM wParam, LPARAM lParam)
   return CPWPropertySheet::OnCommand(wParam, lParam);
 }
 
-BOOL COptions_PropertySheet::PreTranslateMessage(MSG* pMsg) 
+BOOL COptions_PropertySheet::PreTranslateMessage(MSG *pMsg) 
 {
   if (pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_F1) {
     COptions_PropertyPage *pp = (COptions_PropertyPage *)GetActivePage();
@@ -125,7 +125,7 @@ void COptions_PropertySheet::SetupInitialValues()
   // Backup Data
   CString cs_backupPrefix, cs_backupDir;
   m_OPTMD.CurrentFile = GetMainDlg()->GetCurFile().c_str();
-  m_OPTMD.SaveImmediately =
+  m_OPTMD.SaveImmediately = m_save_bSaveImmediately = 
       prefs->GetPref(PWSprefs::SaveImmediately) ? TRUE : FALSE;
   m_OPTMD.BackupBeforeSave =
       prefs->GetPref(PWSprefs::BackupBeforeEverySave) ? TRUE : FALSE;
@@ -141,6 +141,9 @@ void COptions_PropertySheet::SetupInitialValues()
       prefs->GetPref(PWSprefs::BackupDir).c_str();
   m_OPTMD.BackupLocation = cs_backupDir.IsEmpty() ? 0 : 1;
   m_OPTMD.UserBackupOtherLocation = (LPCWSTR)cs_backupDir;
+  // Preferences min/max
+  m_OPTMD.prefminBackupIncrement = (short)prefs->GetPrefMinVal(PWSprefs::BackupMaxIncremented);
+  m_OPTMD.prefmaxBackupIncrement = (short)prefs->GetPrefMaxVal(PWSprefs::BackupMaxIncremented);
 
   // Display Data
   m_OPTMD.AlwaysOnTop =
@@ -167,10 +170,17 @@ void COptions_PropertySheet::SetupInitialValues()
       prefs->GetPref(PWSprefs::PreExpiryWarnDays);
   m_OPTMD.TreeDisplayStatusAtOpen =
       prefs->GetPref(PWSprefs::TreeDisplayStatusAtOpen);
-  m_OPTMD.TrayIconColour =
-      prefs->GetPref(PWSprefs::ClosedTrayIconColour);
   m_OPTMD.HighlightChanges = m_save_bHighlightChanges =
       prefs->GetPref(PWSprefs::HighlightChanges);
+  m_OPTMD.EnableTransparency =
+    prefs->GetPref(PWSprefs::EnableWindowTransparency) ? TRUE : FALSE;
+  m_OPTMD.PercentTransparency =
+      prefs->GetPref(PWSprefs::WindowTransparency);
+  // Preferences min/max
+  m_OPTMD.prefminExpiryDays = (short)prefs->GetPrefMinVal(PWSprefs::PreExpiryWarnDays);
+  m_OPTMD.prefmaxExpiryDays = (short)prefs->GetPrefMaxVal(PWSprefs::PreExpiryWarnDays);
+  m_OPTMD.prefminPercentTransparency = (short)prefs->GetPrefMinVal(PWSprefs::WindowTransparency);
+  m_OPTMD.prefmaxPercentTransparency = (short)prefs->GetPrefMaxVal(PWSprefs::WindowTransparency);
   
   // Misc Data
   m_OPTMD.ConfirmDelete =
@@ -183,6 +193,8 @@ void COptions_PropertySheet::SetupInitialValues()
       prefs->GetPref(PWSprefs::DoubleClickAction);
   m_OPTMD.ShiftDoubleClickAction =
       prefs->GetPref(PWSprefs::ShiftDoubleClickAction);
+  m_OPTMD.prefminAutotypeDelay = prefs->GetPrefMinVal(PWSprefs::DefaultAutotypeDelay);
+  m_OPTMD.prefmaxAutotypeDelay = prefs->GetPrefMaxVal(PWSprefs::DefaultAutotypeDelay);
 
   m_OPTMD.UseDefuser =
       prefs->GetPref(PWSprefs::UseDefaultUser) ? TRUE : FALSE;
@@ -192,10 +204,12 @@ void COptions_PropertySheet::SetupInitialValues()
       prefs->GetPref(PWSprefs::QuerySetDef) ? TRUE : FALSE;
   m_OPTMD.OtherBrowserLocation =
       prefs->GetPref(PWSprefs::AltBrowser).c_str();
-  m_OPTMD.BrowserCmdLineParms =
+  m_OPTMD.OtherBrowserCmdLineParms =
       prefs->GetPref(PWSprefs::AltBrowserCmdLineParms).c_str();
   m_OPTMD.OtherEditorLocation =
-      prefs->GetPref(PWSprefs::AltNotesEditor).c_str();
+      prefs->GetPref(PWSprefs::AltNotesEditor).c_str(); // 
+  m_OPTMD.OtherEditorCmdLineParms =
+      prefs->GetPref(PWSprefs::AltNotesEditorCmdLineParms).c_str();
   CString cs_dats =
       prefs->GetPref(PWSprefs::DefaultAutotypeString).c_str();
   if (cs_dats.IsEmpty())
@@ -212,6 +226,10 @@ void COptions_PropertySheet::SetupInitialValues()
   m_OPTMD.PWHistoryNumDefault =
       prefs->GetPref(PWSprefs::NumPWHistoryDefault);
   m_OPTMD.PWHAction = 0;
+  m_OPTMD.PWHDefExpDays = prefs->GetPref(PWSprefs::DefaultExpiryDays);
+  // Preferences min/max values
+  m_OPTMD.prefminPWHNumber = (short)prefs->GetPrefMinVal(PWSprefs::NumPWHistoryDefault);
+  m_OPTMD.prefmaxPWHNumber = (short)prefs->GetPrefMaxVal(PWSprefs::NumPWHistoryDefault);
 
   // Security Data
   m_OPTMD.ClearClipboardOnMinimize =
@@ -231,6 +249,9 @@ void COptions_PropertySheet::SetupInitialValues()
   m_OPTMD.HashIters = GetMainDlg()->GetHashIters();
   m_OPTMD.CopyPswdBrowseURL =
       prefs->GetPref(PWSprefs::CopyPasswordWhenBrowseToURL) ? TRUE : FALSE;
+  // Preferences min/max values
+  m_OPTMD.prefminIdleTimeout = (short)prefs->GetPrefMinVal(PWSprefs::IdleTimeout);
+  m_OPTMD.prefmaxIdleTimeout = (short)prefs->GetPrefMaxVal(PWSprefs::IdleTimeout);
   
   // Shortcut Data
   m_OPTMD.AppHotKeyValue = int32(prefs->GetPref(PWSprefs::HotKey));
@@ -264,6 +285,11 @@ void COptions_PropertySheet::SetupInitialValues()
   m_OPTMD.DefaultOpenRO = prefs->GetPref(PWSprefs::DefaultOpenRO) ? TRUE : FALSE;
   m_OPTMD.MultipleInstances =
       prefs->GetPref(PWSprefs::MultipleInstances) ? TRUE : FALSE;
+  // Preferences min/max values
+  m_OPTMD.prefminREItems = (short)prefs->GetPrefMinVal(PWSprefs::MaxREItems);
+  m_OPTMD.prefmaxREItems = (short)prefs->GetPrefMaxVal(PWSprefs::MaxREItems);
+  m_OPTMD.prefminMRU = (short)prefs->GetPrefMinVal(PWSprefs::MaxMRUItems);
+  m_OPTMD.prefmaxMRU = (short)prefs->GetPrefMaxVal(PWSprefs::MaxMRUItems);
 }
 
 void COptions_PropertySheet::UpdateCopyPreferences()
@@ -272,7 +298,7 @@ void COptions_PropertySheet::UpdateCopyPreferences()
 
   // Now update the Application preferences.
   // In PropertyPage alphabetic order
-  // Note: Updating the copy values - especially important for DB preferences!!!
+  // Note: Updating the COPY values - especially important for DB preferences!!!
 
   // Backup
   prefs->SetPref(PWSprefs::BackupBeforeEverySave,
@@ -285,7 +311,7 @@ void COptions_PropertySheet::UpdateCopyPreferences()
                  m_OPTMD.MaxNumIncBackups, true);
   if (!m_OPTMD.UserBackupOtherLocation.IsEmpty()) {
     // Make sure it ends in a slash!
-    if (m_OPTMD.UserBackupOtherLocation.Right(1) != CSecString(L'\\'))
+    if (m_OPTMD.UserBackupOtherLocation.Right(1) != CSecString(L"\\"))
       m_OPTMD.UserBackupOtherLocation += L'\\';
   }
   prefs->SetPref(PWSprefs::BackupDir,
@@ -306,13 +332,19 @@ void COptions_PropertySheet::UpdateCopyPreferences()
                  m_OPTMD.PreExpiryWarn == TRUE, true);
   prefs->SetPref(PWSprefs::PreExpiryWarnDays,
                  m_OPTMD.PreExpiryWarnDays, true);
-  prefs->SetPref(PWSprefs::ClosedTrayIconColour,
-                 m_OPTMD.TrayIconColour, true);
-  if (m_save_bHighlightChanges != m_OPTMD.HighlightChanges) {
-    prefs->SetPref(PWSprefs::HighlightChanges,
-                   m_OPTMD.HighlightChanges == TRUE, true);
-    m_bRefreshViews = true;
-  }
+  prefs->SetPref(PWSprefs::HighlightChanges,
+                  m_OPTMD.HighlightChanges == TRUE, true);
+  prefs->SetPref(PWSprefs::EnableWindowTransparency,
+                  m_OPTMD.EnableTransparency == TRUE, true);
+  prefs->SetPref(PWSprefs::WindowTransparency,
+                  m_OPTMD.PercentTransparency, true);
+  
+  // Changes are highlighted only if "hightlight changes" is true and 
+  // "save immediately" is false.
+  // So only need to refresh view if the new combination is different
+  // to the original combination
+  m_bRefreshViews = (m_save_bHighlightChanges && !m_save_bSaveImmediately) != 
+                    (m_OPTMD.HighlightChanges && !m_OPTMD.SaveImmediately);
 
   // Misc
   prefs->SetPref(PWSprefs::DeleteQuestion,
@@ -331,9 +363,11 @@ void COptions_PropertySheet::UpdateCopyPreferences()
   prefs->SetPref(PWSprefs::AltBrowser,
                  LPCWSTR(m_OPTMD.OtherBrowserLocation), true);
   prefs->SetPref(PWSprefs::AltBrowserCmdLineParms,
-                 LPCWSTR(m_OPTMD.BrowserCmdLineParms), true);
+                 LPCWSTR(m_OPTMD.OtherBrowserCmdLineParms), true);
   prefs->SetPref(PWSprefs::AltNotesEditor,
                  LPCWSTR(m_OPTMD.OtherEditorLocation), true);
+  prefs->SetPref(PWSprefs::AltNotesEditorCmdLineParms,
+                 LPCWSTR(m_OPTMD.OtherEditorCmdLineParms), true);
   prefs->SetPref(PWSprefs::MinimizeOnAutotype,
                  m_OPTMD.MinAuto == TRUE, true);
 
@@ -410,12 +444,12 @@ void COptions_PropertySheet::UpdateCopyPreferences()
     prefs->SetPref(PWSprefs::NumPWHistoryDefault,
                    m_OPTMD.PWHistoryNumDefault, true);
 
+  prefs->SetPref(PWSprefs::DefaultExpiryDays, m_OPTMD.PWHDefExpDays, true);
+
   prefs->SetPref(PWSprefs::LockDBOnIdleTimeout,
                  m_OPTMD.LockOnIdleTimeout == TRUE, true);
   prefs->SetPref(PWSprefs::IdleTimeout,
                  m_OPTMD.IdleTimeOut, true);
-
-  GetMainDlg()->SetHashIters(m_OPTMD.HashIters);
 
   // Changing ExplorerTypeTree changes order of items,
   // which DisplayStatus implicitly depends upon

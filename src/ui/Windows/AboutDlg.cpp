@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -74,12 +74,23 @@ BOOL CAboutDlg::OnInitDialog()
 
   const CString cs2go = SysInfo::IsUnderPw2go() ? L"2go " : L" ";
   if (m_nBuild == 0) { // hide build # if zero (formal release)
-    m_appversion.Format(L"%s%sV%d.%02d%s (%s)", AfxGetAppName(), cs2go,
-                        m_nMajor, m_nMinor, SpecialBuild, Revision);
+    m_appversion.Format(L"%s%sV%d.%02d%s (%s)", AfxGetAppName(),
+                        static_cast<LPCWSTR>(cs2go),
+                        m_nMajor, m_nMinor,
+                        static_cast<LPCWSTR>(SpecialBuild),
+                        static_cast<LPCWSTR>(Revision));
   } else {
-    m_appversion.Format(L"%s%sV%d.%02d.%02d%s (%s)", AfxGetAppName(), cs2go,
-                        m_nMajor, m_nMinor, m_nBuild, SpecialBuild, Revision);
+    m_appversion.Format(L"%s%sV%d.%02d.%02d%s (%s)", AfxGetAppName(),
+                        static_cast<LPCWSTR>(cs2go),
+                        m_nMajor, m_nMinor, m_nBuild,
+                        static_cast<LPCWSTR>(SpecialBuild),
+                        static_cast<LPCWSTR>(Revision));
   }
+
+#if _WIN64
+  // Only add platform information for 64-bit build
+  m_appversion += L" 64-bit";
+#endif
 
 #ifdef _DEBUG
   m_appversion += L" [D]";
@@ -103,7 +114,7 @@ BOOL CAboutDlg::OnInitDialog()
     GetDlgItem(IDC_TAKETESTDUMP)->EnableWindow();
   }
 
-  return TRUE;
+  return TRUE;  // return TRUE unless you set the focus to a control
 }
 
 bool CAboutDlg::OnCheckVersion(const CString &URL, const CString & /* lpszFName */, LPARAM instance)
@@ -147,23 +158,24 @@ void CAboutDlg::CheckNewVer()
   wchar_t *html_greenfont = L"<b><font color=\"green\">";
   wchar_t *html_endfont = L"</font></b>";
   switch (CheckLatestVersion(latest)) {
-    case CheckVersion::CANT_CONNECT:
+    case CheckVersion::CheckStatus::CANT_CONNECT:
       m_newVerStatus.Format(IDS_CANT_CONTACT_SERVER, html_redfont, html_endfont);
       break;
-    case CheckVersion::UP2DATE:
+    case CheckVersion::CheckStatus::UP2DATE:
       m_newVerStatus.Format(IDS_UP2DATE, html_greenfont, html_endfont);
       break;
-    case CheckVersion::NEWER_AVAILABLE:
+    case CheckVersion::CheckStatus::NEWER_AVAILABLE:
       {
       CGeneralMsgBox gmb;
       CString newer;
       newer.Format(SysInfo::IsUnderU3() ? IDS_NEWER_AVAILABLE_U3 : IDS_NEWER_AVAILABLE,
-                   m_appversion, latest.c_str());
+                   static_cast<LPCWSTR>(m_appversion),
+                   static_cast<LPCWSTR>(latest.c_str()));
       m_newVerStatus.Format(IDS_NEWER_AVAILABLE_SHORT, html_redfont, html_endfont);
       gmb.MessageBox(newer, CString(MAKEINTRESOURCE(IDS_NEWER_CAPTION)), MB_ICONEXCLAMATION);
       break;
       }
-    case CheckVersion::CANT_READ:
+    case CheckVersion::CheckStatus::CANT_READ:
       m_newVerStatus.Format(IDS_CANT_READ_VERINFO, html_redfont, html_endfont);
       break;
     default:
@@ -174,6 +186,7 @@ void CAboutDlg::CheckNewVer()
   m_RECExNewVerStatus.SetWindowText(m_newVerStatus);
   m_RECExNewVerStatus.Invalidate();
   UpdateData(FALSE);
+
   GetDlgItem(IDOK)->SetFocus();
 }
 
@@ -191,7 +204,7 @@ CheckVersion::CheckStatus CAboutDlg::CheckLatestVersion(std::wstring &latest)
                          1, (INTERNET_FLAG_TRANSFER_BINARY | INTERNET_FLAG_RELOAD));
   } catch (CInternetException *) {
     // throw;
-    return CheckVersion::CANT_CONNECT;
+    return CheckVersion::CheckStatus::CANT_CONNECT;
   }
 
   ASSERT(fh != NULL);
@@ -208,7 +221,7 @@ CheckVersion::CheckStatus CAboutDlg::CheckLatestVersion(std::wstring &latest)
       fh->Close();
       delete fh;
       session.Close();
-      return CheckVersion::CANT_READ;
+      return CheckVersion::CheckStatus::CANT_READ;
     } else
       latest_xml += chunk.c_str();
   }
@@ -229,4 +242,3 @@ void CAboutDlg::OnTakeTestdump()
   CDumpSelect dmpslct;
   dmpslct.DoModal();
 }
-

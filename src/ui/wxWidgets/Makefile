@@ -31,6 +31,16 @@ YUBIFLAGS=-DNO_YUBI
 YBPERS_LIBS=core
 endif
 
+ifndef NO_QR
+ifeq ($(findstring Linux, $(shell uname -s)), Linux)
+QR_SRC=pwsqrcodedlg.cpp pwsqrencode.cpp
+else
+QR_SRC=pwsqrcodedlg.cpp
+endif
+else
+QRFLAGS=-DNO_QR
+endif
+
 # debug
 ifeq ($(CONFIG),debug)
 #Override - debug isn't standard
@@ -47,7 +57,7 @@ OUTPUTPATH=GCCDebug
 OBJECTPATH=GCCDebug
 BUILDPATHS=$(OBJECTPATH)
 PROGRAM=pwsafe
-LIBS=`$(WX_CONFIG) --debug=yes --unicode=no --libs` -lcore -los -lcore -luuid -lXtst -lX11 -l$(YBPERS_LIBS) ${LIBCXX_LD_EXTRA_FLAGS}
+LIBS=`$(WX_CONFIG) --debug=yes --unicode=no --libs` -lcore -los -lcore -luuid -lXtst -lX11  -lcurl -lssl -l$(YBPERS_LIBS) ${LIBCXX_LD_EXTRA_FLAGS}
 LINKERFLAGS=
 WARNINGFLAGS=-Wall
 OPTFLAGS=-O0
@@ -74,7 +84,7 @@ OUTPUTPATH=GCCRelease
 OBJECTPATH=GCCRelease
 BUILDPATHS=$(OBJECTPATH)
 PROGRAM=pwsafe
-LIBS=`$(WX_CONFIG) --debug=no --unicode=no --inplace --libs` -lcore -los -lcore -luuid -lXtst -lX11 -l$(YBPERS_LIBS)
+LIBS=`$(WX_CONFIG) --debug=no --unicode=no --inplace --libs` -lcore -los -lcore -luuid -lXtst -lX11 -lcurl -lssl -l$(YBPERS_LIBS)
 LINKERFLAGS=
 WARNINGFLAGS=-Wall
 OPTFLAGS=-O
@@ -101,15 +111,18 @@ OUTPUTPATH=GCCUnicodeDebug
 OBJECTPATH=GCCUnicodeDebug
 BUILDPATHS=$(OBJECTPATH)
 PROGRAM=pwsafe
-LIBS=`$(WX_CONFIG) --debug=yes --unicode=yes --inplace --libs` -lcore -los -lcore -luuid -lXtst -lX11 -l$(YBPERS_LIBS)
+LIBS=`$(WX_CONFIG) --debug=yes --unicode=yes --inplace --libs` -lcore -los -lcore -l$(YBPERS_LIBS)
+ifneq ($(findstring Darwin, $(shell uname -s)), Darwin)
+		LIBS += -luuid -lXtst -lX11 -lcurl -lssl
+		XERCESLIBFLAGS=-lxerces-c
+		XERCESCPPFLAGS=-DUSE_XML_LIBRARY=XERCES -DWCHAR_INCOMPATIBLE_XMLCH
+endif
 LINKERFLAGS=
 WARNINGFLAGS=-Wall
 OPTFLAGS=-O0
 DEBUGFLAGS=-ggdb -D_DEBUG
 LIBPATH=../../../lib/unicodedebug
 CPPINC=`$(WX_CONFIG) --debug=yes --unicode=yes --inplace --cxxflags` -DUNICODE
-XERCESCPPFLAGS=-DUSE_XML_LIBRARY=XERCES -DWCHAR_INCOMPATIBLE_XMLCH
-XERCESLIBFLAGS=-lxerces-c
 GCCFLAGS=-fPIC
 RESPATH=--include-dir "$(WXWIN)/include" --include-dir "$(WXWIN)/contrib/include" --include-dir "$(WXWIN)/GCCBuildDebugGTK2Unicode/lib/wx/include/gtk2-unicode-debug-static-2.6"
 MACPACKAGEINFO=
@@ -129,15 +142,18 @@ OUTPUTPATH=GCCUnicodeRelease
 OBJECTPATH=GCCUnicodeRelease
 BUILDPATHS=$(OBJECTPATH)
 PROGRAM=pwsafe
-LIBS=`$(WX_CONFIG) --debug=no --unicode=yes --inplace --libs` -lcore -los -lcore -luuid -lXtst -lX11 -l$(YBPERS_LIBS)
+LIBS=`$(WX_CONFIG) --debug=no --unicode=yes --inplace --libs` -lcore -los -lcore -l$(YBPERS_LIBS)
+ifneq ($(findstring Darwin, $(shell uname -s)), Darwin)
+		LIBS += -luuid -lXtst -lX11 -lcurl -lssl
+		XERCESLIBFLAGS=-lxerces-c
+		XERCESCPPFLAGS=-DUSE_XML_LIBRARY=XERCES -DWCHAR_INCOMPATIBLE_XMLCH
+endif
 LINKERFLAGS=
 WARNINGFLAGS=-Wall
 OPTFLAGS=-O
 DEBUGFLAGS=
 LIBPATH=../../../lib/unicoderelease
 CPPINC=`$(WX_CONFIG) --debug=no --unicode=yes --inplace --cxxflags` -DUNICODE -DNDEBUG
-XERCESCPPFLAGS=-DUSE_XML_LIBRARY=XERCES -DWCHAR_INCOMPATIBLE_XMLCH
-XERCESLIBFLAGS=-lxerces-c
 GCCFLAGS=-fPIC
 override LDFLAGS:=$(LIBS) -L$(LIBPATH) $(LINKERFLAGS) $(LDFLAGS)
 RESPATH=--include-dir "$(WXWIN)/include" --include-dir "$(WXWIN)/contrib/include" --include-dir "$(WXWIN)/GCCBuildReleaseGTK2Unicode/lib/wx/include/gtk2-unicode-release-static-2.6"
@@ -155,8 +171,18 @@ YBPERS_LIBPATH?=$(LIBPATH)
 YBPERS_LIBPATH_FLAGS=-L$(YBPERS_LIBPATH)
 endif
 
+ifndef NO_QR
+ifeq ($(findstring Linux, $(shell uname -s)), Linux)
+		LIBS += -lqrencode
+endif
+endif
+
+ifeq ($(findstring Darwin, $(shell uname -s)), Darwin)
+		CPPFLAGS += -std=c++11
+		override LIBS += -framework QuartzCore
+endif
 override LDFLAGS:=$(LIBS) -L$(LIBPATH) $(LINKERFLAGS) $(XERCESLIBFLAGS) $(YBPERS_LIBPATH_FLAGS) $(LDFLAGS)
-CPPFLAGS:=$(CXXFLAGS) $(CPPINC) $(GCCFLAGS) $(DEBUGFLAGS) $(OPTFLAGS) $(WARNINGFLAGS) $(XERCESCPPFLAGS) $(YUBIFLAGS) $(CPPFLAGS)
+CPPFLAGS:=$(CXXFLAGS) $(CPPINC) $(GCCFLAGS) $(DEBUGFLAGS) $(OPTFLAGS) $(WARNINGFLAGS) $(XERCESCPPFLAGS) $(YUBIFLAGS) $(QRFLAGS) $(CPPFLAGS)
 
 SOURCES= passwordsafeframe.cpp \
 	pwsafeapp.cpp safecombinationentry.cpp \
@@ -177,14 +203,21 @@ SOURCES= passwordsafeframe.cpp \
 	PwsSync.cpp DbSelectionPanel.cpp CompareDlg.cpp \
 	wxutils.cpp ComparisonGridTable.cpp SizeRestrictedPanel.cpp \
 	fieldselectionpanel.cpp fieldselectiondlg.cpp pwsmenushortcuts.cpp \
-	$(YUBI_SRC) \
+	$(YUBI_SRC) $(QR_SRC) \
 	ManagePwdPolicies.cpp PasswordPolicy.cpp SelectionCriteria.cpp \
-	TimedTaskChain.cpp mainView.cpp
+	TimedTaskChain.cpp mainView.cpp passwordsubset.cpp
 
 
 OBJECTS=$(SOURCES:%.cpp=$(OBJECTPATH)/%.o)
 OBJECTS += $(RESOURCEOBJECT)
 
+ifeq ($(findstring Darwin, $(shell uname -s)), Darwin)
+	OBJECTS += $(OBJECTPATH)/pwsqrencode.o
+
+
+$(OBJECTPATH)/pwsqrencode.o: pwsqrencode.mm
+	clang -x objective-c++ -stdlib=libc++ -mmacosx-version-min=10.7 $(CPPFLAGS) -c $< -o $@
+endif
 
 all:	$(BUILDPATHS) $(MACPACKAGEINFO) $(OUTPUTPATH)/$(PROGRAM)
 	@echo building "$(CONFIG)" "$@"
@@ -238,6 +271,14 @@ $(DEPDIR)/%.d: %.cpp version.h
 	$(CXX) -MM $(CPPFLAGS) $< > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,$(OBJECTPATH)/\1.o $@ : ,g' < $@.$$$$ > $@; \
 	$(RM) $@.$$$$
+
+ifeq ($(findstring Darwin, $(shell uname -s)), Darwin)
+$(DEPDIR)/pwsqrencode.d: pwsqrencode.mm
+	@set -e; mkdir -p $(DEPDIR); $(RM) $@; \
+	clang -x objective-c++ -stdlib=libc++ -mmacosx-version-min=10.7 -MM $(CPPFLAGS) $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,$(OBJECTPATH)/\1.o $@ : ,g' < $@.$$$$ > $@; \
+	$(RM) $@.$$$$
+endif
 
 version.h: always
 ifdef VER_REV

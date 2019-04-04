@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -62,8 +62,8 @@ void FileV4Test::SetUp()
   hdr.m_lastsavedby = _T("aUser");
   hdr.m_lastsavedon = _T("aMachine");
   hdr.m_whatlastsaved = _T("PasswordSafe test framework");
-  hdr.m_dbname = fname.c_str();
-  hdr.m_dbdesc = _T("Test the header's persistency");
+  hdr.m_DB_Name = fname.c_str();
+  hdr.m_DB_Description = _T("Test the header's persistency");
 
   fullItem.CreateUUID();
   fullItem.SetTitle(title);
@@ -218,12 +218,13 @@ TEST_F(FileV4Test, AttTest)
   EXPECT_EQ(PWSfile::SUCCESS, fr.ReadRecord(readAtt));
   EXPECT_EQ(PWSfile::END_OF_FILE, fr.ReadRecord(item));
   EXPECT_EQ(PWSfile::SUCCESS, fr.Close());
+  attItem.SetOffset(readAtt.GetOffset());
   EXPECT_EQ(attItem, readAtt);
 }
 
 TEST_F(FileV4Test, HdrItemAttTest)
 {
-  PWSfileHeader hdr1, hdr2;
+  PWSfileHeader hdr1;
   PWSfileV4 fw(fname.c_str(), PWSfile::Write, PWSfile::V40);
 
   pws_os::CUUID att_uuid = attItem.GetUUID();
@@ -246,6 +247,7 @@ TEST_F(FileV4Test, HdrItemAttTest)
   EXPECT_EQ(fullItem, readData[0]);
   EXPECT_EQ(PWSfile::WRONG_RECORD, fr.ReadRecord(readData[1])); // att here!
   EXPECT_EQ(PWSfile::SUCCESS, fr.ReadRecord(readAtt));
+  attItem.SetOffset(readAtt.GetOffset());
   EXPECT_EQ(attItem, readAtt);
   EXPECT_EQ(PWSfile::SUCCESS, fr.Close());
 }
@@ -256,15 +258,15 @@ TEST_F(FileV4Test, CoreRWTest)
   const StringX passkey(L"3rdMambo");
 
   fullItem.SetAttUUID(attItem.GetUUID());
-  EXPECT_EQ(0, attItem.GetRefcount());
+  EXPECT_EQ(0U, attItem.GetRefcount());
 
   core.SetPassKey(passkey);
   core.Execute(AddEntryCommand::Create(&core, fullItem, pws_os::CUUID::NullUUID(), &attItem));
   EXPECT_TRUE(core.HasAtt(attItem.GetUUID()));
-  EXPECT_EQ(1, core.GetAtt(attItem.GetUUID()).GetRefcount());
+  EXPECT_EQ(1U, core.GetAtt(attItem.GetUUID()).GetRefcount());
   EXPECT_EQ(PWSfile::SUCCESS, core.WriteFile(fname.c_str(), PWSfile::V40));
 
-  core.ClearData();
+  core.ClearDBData();
   EXPECT_EQ(PWSfile::FAILURE, core.ReadFile(fname.c_str(), L"WrongPassword", true));
   EXPECT_EQ(PWSfile::SUCCESS, core.ReadFile(fname.c_str(), passkey, true));
   ASSERT_EQ(1, core.GetNumEntries());
@@ -276,7 +278,7 @@ TEST_F(FileV4Test, CoreRWTest)
   EXPECT_EQ(attItem.GetUUID(), readFullItem.GetAttUUID());
   EXPECT_EQ(fullItem, readFullItem);
   ASSERT_TRUE(core.HasAtt(attItem.GetUUID()));
-  EXPECT_EQ(1, core.GetAtt(attItem.GetUUID()).GetRefcount());
+  EXPECT_EQ(1U, core.GetAtt(attItem.GetUUID()).GetRefcount());
 
   core.Execute(DeleteEntryCommand::Create(&core, readFullItem));
   ASSERT_EQ(0, core.GetNumEntries());

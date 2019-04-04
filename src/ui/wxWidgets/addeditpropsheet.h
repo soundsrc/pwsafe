@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -13,19 +13,18 @@
 #ifndef _ADDEDITPROPSHEET_H_
 #define _ADDEDITPROPSHEET_H_
 
-
 /*!
  * Includes
  */
 
 ////@begin includes
-#include "wx/propdlg.h"
-#include "wx/valgen.h"
-#include "wx/spinctrl.h"
-#include "wx/grid.h"
-#include "wx/datectrl.h"
-#include "wx/dateevt.h"
-#include "wx/statline.h"
+#include <wx/propdlg.h>
+#include <wx/valgen.h>
+#include <wx/spinctrl.h>
+#include <wx/grid.h>
+#include <wx/datectrl.h>
+#include <wx/dateevt.h>
+#include <wx/statline.h>
 ////@end includes
 #include "core/ItemData.h"
 #include "core/PWScore.h"
@@ -55,35 +54,35 @@ class UIInterFace;
 ////@begin control identifiers
 #define ID_ADDEDITPROPSHEET 10083
 #define ID_PANEL_BASIC 10084
-#define ID_COMBOBOX1 10095
-#define ID_TEXTCTRL5 10096
-#define ID_TEXTCTRL1 10088
-#define ID_TEXTCTRL2 10089
+#define ID_COMBOBOX_GROUP 10095
+#define ID_TEXTCTRL_TITLE 10096
+#define ID_TEXTCTRL_USERNAME 10088
+#define ID_TEXTCTRL_PASSWORD 10089
 #define ID_BUTTON2 10090
-#define ID_BUTTON3 10097
-#define ID_TEXTCTRL3 10091
-#define ID_TEXTCTRL4 10092
+#define ID_BUTTON_GENERATE 10097
+#define ID_TEXTCTRL_PASSWORD2 10091
+#define ID_TEXTCTRL_URL 10092
 #define ID_GO_BTN 10093
-#define ID_TEXTCTRL20 10100
+#define ID_TEXTCTRL_EMAIL 10100
 #define ID_SEND_BTN 10214
-#define ID_TEXTCTRL7 10098
+#define ID_TEXTCTRL_NOTES 10098
 #define ID_PANEL_ADDITIONAL 10085
-#define ID_TEXTCTRL6 10094
-#define ID_TEXTCTRL8 10099
-#define ID_COMBOBOX 10101
-#define ID_COMBOBOX2 10000
-#define ID_CHECKBOX1 10102
-#define ID_SPINCTRL 10103
-#define ID_GRID 10104
-#define ID_BUTTON1 10105
-#define ID_BUTTON4 10106
+#define ID_TEXTCTRL_AUTOTYPE 10094
+#define ID_TEXTCTRL_RUN_CMD 10099
+#define ID_COMBOBOX_DBC_ACTION 10101
+#define ID_COMBOBOX_SDBC_ACTION 10000
+#define ID_CHECKBOX_KEEP 10102
+#define ID_SPINCTRL_MAX_PW_HIST 10103
+#define ID_GRID_PW_HIST 10104
+#define ID_BUTTON_CLEAR_HIST 10105
+#define ID_BUTTON_COPY_ALL 10106
 #define ID_PANEL_DTIME 10086
-#define ID_RADIOBUTTON 10107
-#define ID_DATECTRL 10108
-#define ID_RADIOBUTTON1 10110
-#define ID_SPINCTRL2 10111
-#define ID_CHECKBOX2 10112
-#define ID_RADIOBUTTON4 10001
+#define ID_RADIOBUTTON_ON 10107
+#define ID_DATECTRL_EXP_DATE 10108
+#define ID_RADIOBUTTON_IN 10110
+#define ID_SPINCTRL_EXP_TIME 10111
+#define ID_CHECKBOX_RECURRING 10112
+#define ID_RADIOBUTTON_NEVER 10001
 #define ID_PANEL_PPOLICY 10087
 #define ID_RADIOBUTTON2 10115
 #define ID_POLICYLIST 10063
@@ -102,6 +101,7 @@ class UIInterFace;
 #define ID_CHECKBOX7 10122
 #define ID_CHECKBOX8 10123
 #define ID_CHECKBOX9 10124
+#define ID_STATICTEXT_DAYS 11125
 #define SYMBOL_ADDEDITPROPSHEET_STYLE wxCAPTION|wxRESIZE_BORDER|wxSYSTEM_MENU|wxCLOSE_BOX|wxDIALOG_MODAL
 #define SYMBOL_ADDEDITPROPSHEET_TITLE _("Edit Entry")
 #define SYMBOL_ADDEDITPROPSHEET_IDNAME ID_ADDEDITPROPSHEET
@@ -113,23 +113,21 @@ class UIInterFace;
 #define SYMBOL_VIEWPROPSHEET_TITLE _("View Entry")
 #define SYMBOL_AUTOPROPSHEET_TITLE _("Add, Edit or View Entry")
 
-
-
 /*!
  * AddEditPropSheet class declaration
  */
 
 class AddEditPropSheet: public wxPropertySheetDialog
-{    
+{
   DECLARE_CLASS( AddEditPropSheet )
   DECLARE_EVENT_TABLE()
 
 public:
-  enum AddOrEdit {ADD, EDIT, VIEW}; // to tweak UI, mainly
+  enum class SheetType {ADD, EDIT, VIEW}; // to tweak UI, mainly
   /// Constructor
-  // item is NULL for ADD, otherwise its values are retrieved and displayed
+  // item is nullptr for ADD, otherwise its values are retrieved and displayed
   AddEditPropSheet(wxWindow* parent, PWScore &core,
-                   AddOrEdit type, const CItemData *item = NULL,  UIInterFace* ui = 0,
+                   SheetType type, const CItemData *item = nullptr,  UIInterFace* ui = 0,
                    const wxString& selectedGroup = wxEmptyString,
                    wxWindowID id = SYMBOL_ADDEDITPROPSHEET_IDNAME,
                    const wxString& caption = SYMBOL_AUTOPROPSHEET_TITLE,
@@ -163,19 +161,19 @@ public:
   /// wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_SEND_BTN
   void OnSendButtonClick( wxCommandEvent& event );
 
-  /// wxEVT_SET_FOCUS event handler for ID_TEXTCTRL7
+  /// wxEVT_SET_FOCUS event handler for ID_TEXTCTRL_NOTES
   void OnNoteSetFocus( wxFocusEvent& event );
 
-  /// wxEVT_COMMAND_CHECKBOX_CLICKED event handler for ID_CHECKBOX1
+  /// wxEVT_COMMAND_CHECKBOX_CLICKED event handler for ID_CHECKBOX_KEEP
   void OnKeepHistoryClick( wxCommandEvent& event );
 
-  /// wxEVT_COMMAND_RADIOBUTTON_SELECTED event handler for ID_RADIOBUTTON
+  /// wxEVT_COMMAND_RADIOBUTTON_SELECTED event handler for ID_RADIOBUTTON_ON
   void OnExpRadiobuttonSelected( wxCommandEvent& event );
 
-  /// wxEVT_DATE_CHANGED event handler for ID_DATECTRL
+  /// wxEVT_DATE_CHANGED event handler for ID_DATECTRL_EXP_DATE
   void OnExpDateChanged( wxDateEvent& event );
 
-  /// wxEVT_COMMAND_SPINCTRL_UPDATED event handler for ID_SPINCTRL2
+  /// wxEVT_COMMAND_SPINCTRL_UPDATED event handler for ID_SPINCTRL_EXP_TIME
   void OnExpIntervalChanged( wxSpinEvent& event );
 
   /// wxEVT_COMMAND_RADIOBUTTON_SELECTED event handler for ID_RADIOBUTTON2
@@ -211,12 +209,17 @@ public:
   /// wxEVT_COMMAND_CHECKBOX_CLICKED event handler for ID_CHECKBOX9
   void OnUseHexCBClick( wxCommandEvent& event );
 
+  /// wxEVT_UPDATE_UI event handler for all command ids
+  void OnUpdateUI(wxUpdateUIEvent& event );
+
 ////@end AddEditPropSheet event handler declarations
   void OnEZreadOrPronounceable( wxCommandEvent& evt);
   void OnClearPWHist(wxCommandEvent& evt);
   void OnOk(wxCommandEvent& evt);
   void OnUpdateResetPWPolicyButton(wxUpdateUIEvent& evt);
-  void OnAtLeastChars(wxSpinEvent& evt);
+
+  /// wxEVT_SPINCTRL event handler for ID_SPINCTRL5, ID_SPINCTRL6, ID_SPINCTRL7, ID_SPINCTRL8
+  void OnAtLeastPasswordChars(wxSpinEvent& evt);
 ////@begin AddEditPropSheet member function declarations
 
   wxString GetATime() const { return m_ATime ; }
@@ -288,6 +291,8 @@ public:
 
 ////@begin AddEditPropSheet member variables
   wxPanel* m_BasicPanel;
+  wxPanel* m_AdditionalPanel;
+  wxPanel* m_PasswordPolicyPanel;
   wxFlexGridSizer* m_BasicFGSizer;
   wxComboBox* m_groupCtrl;
   wxTextCtrl* m_UsernameCtrl;
@@ -357,7 +362,7 @@ private:
   UIInterFace *m_ui;
   wxString m_selectedGroup;  //Group title in tree view user right-clicked on to add an item
 
-  AddOrEdit m_type;
+  SheetType m_type;
   CItemData m_item;
   void ItemFieldsToPropSheet();
   void SetupDCAComboBoxes(wxComboBox *pcbox, short &iDCA, bool isShift);

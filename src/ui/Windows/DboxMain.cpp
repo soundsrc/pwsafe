@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -16,6 +16,7 @@
 //-----------------------------------------------------------------------------
 
 #include "PasswordSafe.h"
+
 #include "ThisMfcApp.h"
 #include "DboxMain.h"
 
@@ -27,6 +28,7 @@
 #include "GeneralMsgBox.h"
 #include "InfoDisplay.h"
 #include "PasskeySetup.h"
+#include "SetDBID.h"
 
 // Set Ctrl/Alt/Shift strings for menus
 #include "MenuShortcuts.h"
@@ -96,8 +98,6 @@ CString DboxMain::CS_CLEARFILTERS;
 CString DboxMain::CS_READWRITE;
 CString DboxMain::CS_READONLY;
 
-LOGFONT dfltTreeListFont;
-
 void DboxMain::SetLocalStrings()
 {
   // Set up static versions of menu items.  Old method was to do a LoadString
@@ -112,30 +112,30 @@ void DboxMain::SetLocalStrings()
 }
 
 //-----------------------------------------------------------------------------
-DboxMain::DboxMain(CWnd* pParent)
+DboxMain::DboxMain(PWScore &core, CWnd* pParent)
   : CDialog(DboxMain::IDD, pParent),
+  m_TrayLockedState(LOCKED), m_pTrayIcon(NULL),
   m_pPasskeyEntryDlg(NULL), m_bSizing(false), m_bDBNeedsReading(true), m_bInitDone(false),
   m_toolbarsSetup(FALSE),
   m_bSortAscending(true), m_iTypeSortColumn(CItemData::TITLE),
-  m_core(*app.GetCore()),
-  m_bTSUpdated(false),
+  m_core(core),
+  m_bEntryTimestampsChanged(false),
   m_iSessionEndingStatus(IDIGNORE),
   m_pwchTip(NULL),
   m_bOpen(false), 
-  m_IsStartClosed(false), m_IsStartSilent(false),
-  m_bStartHiddenAndMinimized(false),
+  m_IsStartNoDB(false),
   m_bAlreadyToldUserNoSave(false), m_inExit(false),
   m_pCC(NULL), m_bBoldItem(false), m_bIsRestoring(false), m_bImageInLV(false),
   m_lastclipboardaction(L""), m_pNotesDisplay(NULL),
-  m_LastFoundTreeItem(NULL), m_LastFoundListItem(-1),
+  m_LastFoundTreeItem(NULL), m_LastFoundListItem(-1), m_iCurrentItemFound(-1),
   m_bFilterActive(false), m_bNumPassedFiltering(0),
   m_currentfilterpool(FPOOL_LAST), m_bDoAutoType(false),
   m_sxAutoType(L""), m_pToolTipCtrl(NULL), m_bWSLocked(false), m_bWTSRegistered(false),
   m_savedDBprefs(EMPTYSAVEDDBPREFS), m_bBlockShutdown(false),
   m_pfcnShutdownBlockReasonCreate(NULL), m_pfcnShutdownBlockReasonDestroy(NULL),
-  m_bUnsavedDisplayed(false), m_RUEList(*app.GetCore()),
-  m_eye_catcher(_wcsdup(EYE_CATCHER)),
-  m_hUser32(NULL), m_bInAddGroup(false),
+  m_bUnsavedDisplayed(false), m_bExpireDisplayed(false), m_bFindFilterDisplayed(false),
+  m_RUEList(core), m_eye_catcher(_wcsdup(EYE_CATCHER)),
+  m_hUser32(NULL), m_bInAddGroup(false), m_bWizardActive(false),
   m_wpDeleteMsg(WM_KEYDOWN), m_wpDeleteKey(VK_DELETE),
   m_wpRenameMsg(WM_KEYDOWN), m_wpRenameKey(VK_F2),
   m_wpAutotypeUPMsg(WM_KEYUP), m_wpAutotypeDNMsg(WM_KEYDOWN), m_wpAutotypeKey('T'),
@@ -143,28 +143,37 @@ DboxMain::DboxMain(CWnd* pParent)
   m_bRenameCtrl(false), m_bRenameShift(false),
   m_bAutotypeCtrl(false), m_bAutotypeShift(false),
   m_bInAT(false), m_bInRestoreWindowsData(false), m_bSetup(false), m_bCompareEntries(false),
-  m_bInRefresh(false), m_bInRestoreWindows(false), m_bExpireDisplayed(false),
+  m_bInRefresh(false), m_bInRestoreWindows(false),
   m_bTellUserExpired(false), m_bInRename(false), m_bWhitespaceRightClick(false),
   m_ilastaction(0), m_bNoValidation(false), m_bDBInitiallyRO(false), m_bViaDCA(false),
+  m_bUserDeclinedSave(false), m_bRestoredDBUnsaved(false),
   m_LUUIDSelectedAtMinimize(pws_os::CUUID::NullUUID()),
   m_TUUIDSelectedAtMinimize(pws_os::CUUID::NullUUID()),
   m_LUUIDVisibleAtMinimize(pws_os::CUUID::NullUUID()),
-  m_TUUIDVisibleAtMinimize(pws_os::CUUID::NullUUID())
+  m_TUUIDVisibleAtMinimize(pws_os::CUUID::NullUUID()),
+  m_bFindToolBarVisibleAtLock(false), m_bSuspendGUIUpdates(false), m_iNeedRefresh(NONE),
+  m_iDBIndex(0), m_hMutexDBIndex(NULL),
+  m_DBLockedIndexColour(RGB(255, 255, 0)), m_DBUnlockedIndexColour(RGB(255, 255, 0)),
+  m_bOnStartupTransparancyEnabled(false)
 {
   // Need to do the following as using the direct calls will fail for Windows versions before Vista
-  m_hUser32 = HMODULE(pws_os::LoadLibrary(_T("User32.dll"), pws_os::LOAD_LIBRARY_SYS));
+  m_hUser32 = HMODULE(pws_os::LoadLibrary(L"User32.dll", pws_os::loadLibraryTypes::SYS));
   if (m_hUser32 != NULL) {
     m_pfcnShutdownBlockReasonCreate = PSBR_CREATE(pws_os::GetFunction(m_hUser32,
                                                                       "ShutdownBlockReasonCreate"));
     m_pfcnShutdownBlockReasonDestroy = PSBR_DESTROY(pws_os::GetFunction(m_hUser32, "ShutdownBlockReasonDestroy"));
 
+    m_pfcnSetLayeredWindowAttributes = PSLWA(pws_os::GetFunction(m_hUser32, "SetLayeredWindowAttributes"));
+
     // Do not free library until the end or the addresses may become invalid
     // On the other hand - if either of these addresses are NULL, why keep it?
     if (m_pfcnShutdownBlockReasonCreate == NULL || 
-        m_pfcnShutdownBlockReasonDestroy == NULL) {
-      // Make both NULL in case only one was
+        m_pfcnShutdownBlockReasonDestroy == NULL ||
+        m_pfcnSetLayeredWindowAttributes == NULL) {
+      // Make all NULL in case only one was
       m_pfcnShutdownBlockReasonCreate = NULL;
       m_pfcnShutdownBlockReasonDestroy = NULL;
+      m_pfcnSetLayeredWindowAttributes = NULL;
       pws_os::FreeLibrary(m_hUser32);
       m_hUser32 = NULL;
     }
@@ -181,8 +190,6 @@ DboxMain::DboxMain(CWnd* pParent)
 
   m_sxSelectedGroup = L"";
   m_sxVisibleGroup = L"";
-
-  ClearData();
 
   m_titlebar = L"";
   m_toolbarsSetup = FALSE;
@@ -224,7 +231,7 @@ void DboxMain::RegisterSessionNotification(const bool bRegister)
   typedef DWORD (WINAPI *PWTS_UnRegSN) (HWND);
 
   m_bWTSRegistered = false;
-  HMODULE hWTSAPI32 = HMODULE(pws_os::LoadLibrary(_T("wtsapi32.dll"), pws_os::LOAD_LIBRARY_SYS));
+  HMODULE hWTSAPI32 = HMODULE(pws_os::LoadLibrary(L"wtsapi32.dll", pws_os::loadLibraryTypes::SYS));
   if (hWTSAPI32 == NULL)
     return;
 
@@ -341,7 +348,6 @@ LRESULT DboxMain::OnWH_SHELL_CallBack(WPARAM wParam, LPARAM )
 
 BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   //{{AFX_MSG_MAP(DboxMain)
-
   ON_REGISTERED_MESSAGE(app.m_uiRegMsg, OnAreYouMe)
   ON_REGISTERED_MESSAGE(app.m_uiWH_SHELL, OnWH_SHELL_CallBack)
   ON_UPDATE_COMMAND_UI_RANGE(ID_MENUTOOLBAR_START, ID_MENUTOOLBAR_END, OnUpdateMenuToolbar)
@@ -350,6 +356,7 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   ON_COMMAND(ID_MENUITEM_NEW, OnNew)
   ON_COMMAND(ID_MENUITEM_OPEN, OnOpen)
   ON_COMMAND(ID_MENUITEM_CLOSE, OnClose)
+  ON_COMMAND(ID_MENUITEM_LOCK, OnTrayLockUnLock)
   ON_COMMAND(ID_MENUITEM_CLEAR_MRU, OnClearMRU)
   ON_COMMAND(ID_MENUITEM_SAVE, OnSave)
   ON_COMMAND(ID_MENUITEM_SAVEAS, OnSaveAs)
@@ -372,8 +379,8 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   ON_COMMAND(ID_MENUITEM_ADDGROUP, OnAddGroup)
   ON_COMMAND(ID_MENUITEM_DUPLICATEGROUP, OnDuplicateGroup)
   ON_COMMAND(ID_MENUITEM_CREATESHORTCUT, OnCreateShortcut)
-  ON_COMMAND(ID_MENUITEM_EDIT, OnEdit)
-  ON_COMMAND(ID_MENUITEM_VIEW, OnEdit)
+  ON_COMMAND(ID_MENUITEM_EDITENTRY, OnEdit)
+  ON_COMMAND(ID_MENUITEM_VIEWENTRY, OnEdit)
   ON_COMMAND(ID_MENUITEM_GROUPENTER, OnEdit)
   ON_COMMAND(ID_MENUITEM_BROWSEURL, OnBrowse)
   ON_COMMAND(ID_MENUITEM_SENDEMAIL, OnSendEmail)
@@ -395,6 +402,7 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   ON_COMMAND(ID_MENUITEM_GOTOBASEENTRY, OnGotoBaseEntry)
   ON_COMMAND(ID_MENUITEM_RUNCOMMAND, OnRunCommand)
   ON_COMMAND(ID_MENUITEM_EDITBASEENTRY, OnEditBaseEntry)
+  ON_COMMAND(ID_MENUITEM_VIEWATTACHMENT, OnViewAttachment)
   ON_COMMAND(ID_MENUITEM_UNDO, OnUndo)
   ON_COMMAND(ID_MENUITEM_REDO, OnRedo)
   ON_COMMAND(ID_MENUITEM_EXPORTENT2PLAINTEXT, OnExportEntryText)
@@ -406,6 +414,7 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   ON_COMMAND(ID_MENUITEM_EXPORTGRP2XML, OnExportGroupXML)
   ON_COMMAND(ID_MENUITEM_EXPORTGRP2DB, OnExportGroupDB)
   ON_COMMAND(ID_MENUITEM_EXPORT_ATTACHMENT, OnExportAttachment)
+  ON_COMMAND(ID_MENUITEM_EXPORTFILTERED2DB, OnExportFilteredDB)
 
   // View Menu
   ON_COMMAND(ID_MENUITEM_LIST_VIEW, OnListView)
@@ -414,11 +423,11 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   ON_COMMAND(ID_MENUITEM_SHOWHIDE_DRAGBAR, OnShowHideDragbar)
   ON_COMMAND(ID_MENUITEM_OLD_TOOLBAR, OnOldToolbar)
   ON_COMMAND(ID_MENUITEM_NEW_TOOLBAR, OnNewToolbar)
-  ON_COMMAND(ID_MENUITEM_SHOWFINDTOOLBAR, OnShowFindToolbar)
   ON_COMMAND(ID_MENUITEM_FINDELLIPSIS, OnShowFindToolbar)
   ON_COMMAND(ID_MENUITEM_EXPANDALL, OnExpandAll)
   ON_COMMAND(ID_MENUITEM_COLLAPSEALL, OnCollapseAll)
   ON_COMMAND(ID_MENUITEM_CHANGETREEFONT, OnChangeTreeFont)
+  ON_COMMAND(ID_MENUITEM_CHANGEADDEDITFONT, OnChangeAddEditFont)
   ON_COMMAND(ID_MENUITEM_CHANGEPSWDFONT, OnChangePswdFont)
   ON_COMMAND(ID_MENUITEM_VKEYBOARDFONT, OnChangeVKFont)
   ON_COMMAND(ID_MENUITEM_CHANGENOTESFONT, OnChangeNotesFont)
@@ -430,11 +439,13 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   ON_COMMAND(ID_MENUITEM_APPLYFILTER, OnApplyFilter)
   ON_COMMAND(ID_MENUITEM_CLEARFILTER, OnApplyFilter)
   ON_COMMAND(ID_MENUITEM_EDITFILTER, OnSetFilter)
-  ON_COMMAND(ID_MENUITEM_MANAGEFILTERS, OnManageFilters)
+  ON_COMMAND(ID_MENUITEM_MANAGEFILTERS, OnManageFilters) 
+  ON_COMMAND(ID_MENUITEM_EXPORTFILTERED2DB, OnExportFilteredDB)
   ON_COMMAND(ID_MENUITEM_PASSWORDSUBSET, OnDisplayPswdSubset)
   ON_COMMAND(ID_MENUITEM_REFRESH, OnRefreshWindow)
   ON_COMMAND(ID_MENUITEM_SHOWHIDE_UNSAVED, OnShowUnsavedEntries)
   ON_COMMAND(ID_MENUITEM_SHOW_ALL_EXPIRY, OnShowExpireList)
+  ON_COMMAND(ID_MENUITEM_SHOW_FOUNDENTRIES, OnShowFoundEntries)
 
   // Manage Menu
   ON_COMMAND(ID_MENUITEM_CHANGECOMBO, OnPassphraseChange)
@@ -443,6 +454,7 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   ON_COMMAND(ID_MENUITEM_OPTIONS, OnOptions)
   ON_COMMAND(ID_MENUITEM_GENERATEPASSWORD, OnGeneratePassword)
   ON_COMMAND(ID_MENUITEM_YUBIKEY, OnYubikey)
+  ON_COMMAND(ID_MENUITEM_SETDBID, OnSetDBID)
   ON_COMMAND(ID_MENUITEM_PSWD_POLICIES, OnManagePasswordPolicies)
 
   // Help Menu
@@ -461,21 +473,21 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   // Double-click on filter indicator on StatusBar
   ON_COMMAND(IDB_FILTER_ACTIVE, OnCancelFilter)
 
-  ON_WM_CONTEXTMENU()
-
   // Windows Messages
+  ON_WM_CONTEXTMENU()
   ON_WM_DESTROY()
+  ON_WM_DRAWITEM()
   ON_WM_INITMENU()
   ON_WM_INITMENUPOPUP()
+  ON_WM_MEASUREITEM()
   ON_WM_MOVE()
   ON_WM_SIZE()
+  ON_WM_SIZING()
   ON_WM_SYSCOMMAND()
   ON_WM_TIMER()
   ON_WM_WINDOWPOSCHANGING()
 
-  ON_WM_DRAWITEM()
-  ON_WM_MEASUREITEM()
-
+  // Nofication messages
   ON_NOTIFY(NM_CLICK, IDC_ITEMLIST, OnListItemSelected)
   ON_NOTIFY(NM_CLICK, IDC_ITEMTREE, OnTreeItemSelected)
   ON_NOTIFY(LVN_KEYDOWN, IDC_ITEMLIST, OnKeydownItemlist)
@@ -492,14 +504,13 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   ON_COMMAND(ID_MENUITEM_MINIMIZE, OnMinimize)
   ON_COMMAND(ID_MENUITEM_RESTORE, OnRestore)
 
-  ON_WM_SIZING()
   ON_COMMAND(ID_MENUITEM_TRAYLOCK, OnTrayLockUnLock)
   ON_COMMAND(ID_MENUITEM_TRAYUNLOCK, OnTrayLockUnLock)
   ON_COMMAND(ID_MENUITEM_CLEARRECENTENTRIES, OnTrayClearRecentEntries)
   ON_COMMAND(ID_TOOLBUTTON_LISTTREE, OnToggleView)
   ON_COMMAND(ID_TOOLBUTTON_VIEWREPORTS, OnViewReports)
 
-  ON_COMMAND(ID_TOOLBUTTON_CLOSEFIND, OnHideFindToolBar)
+  ON_COMMAND(ID_TOOLBUTTON_CLOSEFIND, OnHideFindToolbar)
   ON_COMMAND(ID_MENUITEM_FIND, OnToolBarFind)
   ON_COMMAND(ID_MENUITEM_FINDUP, OnToolBarFindUp)
   ON_COMMAND(ID_TOOLBUTTON_FINDCASE, OnToolBarFindCase)
@@ -529,7 +540,6 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
 
   ON_COMMAND(ID_MENUITEM_CUSTOMIZETOOLBAR, OnCustomizeToolbar)
 
-  //}}AFX_MSG_MAP
   ON_COMMAND_EX_RANGE(ID_FILE_MRU_ENTRY1, ID_FILE_MRU_ENTRYMAX, OnOpenMRU)
   ON_UPDATE_COMMAND_UI(ID_FILE_MRU_ENTRY1, OnUpdateMRU)  // Note: can't be in OnUpdateMenuToolbar!
   ON_COMMAND_RANGE(ID_MENUITEM_TRAYCOPYUSERNAME1, ID_MENUITEM_TRAYCOPYUSERNAMEMAX, OnTrayCopyUsername)
@@ -556,7 +566,10 @@ BEGIN_MESSAGE_MAP(DboxMain, CDialog)
   ON_UPDATE_COMMAND_UI_RANGE(ID_MENUITEM_TRAYSENDEMAIL1, ID_MENUITEM_TRAYSENDEMAILMAX, OnUpdateTraySendEmail)
   ON_COMMAND_RANGE(ID_MENUITEM_TRAYSELECT1, ID_MENUITEM_TRAYSELECTMAX, OnTraySelect)
   ON_UPDATE_COMMAND_UI_RANGE(ID_MENUITEM_TRAYSELECT1, ID_MENUITEM_TRAYSELECTMAX, OnUpdateTraySelect)
-  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXTW, 0, 0xFFFF, OnToolTipText)
+  ON_COMMAND_RANGE(ID_MENUITEM_GOTODEPENDANT1, ID_MENUITEM_GOTODEPENDANTMAX, OnGotoDependant)
+  ON_UPDATE_COMMAND_UI_RANGE(ID_MENUITEM_GOTODEPENDANT1, ID_MENUITEM_GOTODEPENDANTMAX, OnUpdateGotoDependant)
+  ON_NOTIFY_EX_RANGE(TTN_NEEDTEXT, 0, 0xFFFF, OnToolTipText)
+  //}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
 // Command ID, OpenRW, OpenRO, Empty, Closed
@@ -565,6 +578,7 @@ const DboxMain::UICommandTableEntry DboxMain::m_UICommandTable[] = {
   {ID_MENUITEM_OPEN, true, true, true, true},
   {ID_MENUITEM_NEW, true, true, true, true},
   {ID_MENUITEM_CLOSE, true, true, true, false},
+  {ID_MENUITEM_LOCK, true, true, true, false},
   {ID_MENUITEM_SAVE, true, false, true, false},
   {ID_MENUITEM_SAVEAS, true, true, true, false},
   {ID_MENUITEM_CLEAR_MRU, true, true, true, true},
@@ -586,8 +600,8 @@ const DboxMain::UICommandTableEntry DboxMain::m_UICommandTable[] = {
   {ID_MENUITEM_EXIT, true, true, true, true},
   // Edit menu
   {ID_MENUITEM_ADD, true, false, true, false},
-  {ID_MENUITEM_EDIT, true, true, false, false},
-  {ID_MENUITEM_VIEW, true, true, false, false},
+  {ID_MENUITEM_EDITENTRY, true, false, false, false},
+  {ID_MENUITEM_VIEWENTRY, true, true, false, false},
   {ID_MENUITEM_GROUPENTER, true, true, false, false},
   {ID_MENUITEM_DELETEENTRY, true, false, false, false},
   {ID_MENUITEM_DELETEGROUP, true, false, false, false},
@@ -618,6 +632,7 @@ const DboxMain::UICommandTableEntry DboxMain::m_UICommandTable[] = {
   {ID_MENUITEM_GOTOBASEENTRY, true, true, false, false},
   {ID_MENUITEM_CREATESHORTCUT, true, false, false, false},
   {ID_MENUITEM_EDITBASEENTRY, true, true, false, false},
+  {ID_MENUITEM_VIEWATTACHMENT, true, true, false, false},
   {ID_MENUITEM_UNDO, true, false, true, false},
   {ID_MENUITEM_REDO, true, false, true, false},
   {ID_MENUITEM_EXPORTENT2PLAINTEXT, true, true, false, false},
@@ -635,10 +650,10 @@ const DboxMain::UICommandTableEntry DboxMain::m_UICommandTable[] = {
   {ID_MENUITEM_SHOWHIDE_DRAGBAR, true, true, true, true},
   {ID_MENUITEM_NEW_TOOLBAR, true, true, true, true},
   {ID_MENUITEM_OLD_TOOLBAR, true, true, true, true},
-  {ID_MENUITEM_SHOWFINDTOOLBAR, true, true, false, false},
   {ID_MENUITEM_EXPANDALL, true, true, true, false},
   {ID_MENUITEM_COLLAPSEALL, true, true, true, false},
   {ID_MENUITEM_CHANGETREEFONT, true, true, true, true},
+  {ID_MENUITEM_CHANGEADDEDITFONT, true, true, true, true},
   {ID_MENUITEM_CHANGEPSWDFONT, true, true, true, true},
   {ID_MENUITEM_CHANGENOTESFONT, true, true, true, true},
   {ID_MENUITEM_VKEYBOARDFONT, true, true, true, true},
@@ -658,10 +673,12 @@ const DboxMain::UICommandTableEntry DboxMain::m_UICommandTable[] = {
   {ID_MENUITEM_APPLYFILTER, true, true, false, false},
   {ID_MENUITEM_CLEARFILTER, true, true, false, false},
   {ID_MENUITEM_MANAGEFILTERS, true, true, true, true},
+  {ID_MENUITEM_EXPORTFILTERED2DB, true, true, false, false},
   {ID_MENUITEM_PASSWORDSUBSET, true, true, false, false},
   {ID_MENUITEM_REFRESH, true, true, false, false},
   {ID_MENUITEM_SHOWHIDE_UNSAVED, true, false, false, false},
   {ID_MENUITEM_SHOW_ALL_EXPIRY, true, true, false, false},
+  {ID_MENUITEM_SHOW_FOUNDENTRIES, true, true, false, false},
   // Manage menu
   {ID_MENUITEM_CHANGECOMBO, true, false, true, false},
   {ID_MENUITEM_BACKUPSAFE, true, true, true, false},
@@ -669,6 +686,7 @@ const DboxMain::UICommandTableEntry DboxMain::m_UICommandTable[] = {
   {ID_MENUITEM_OPTIONS, true, true, true, true},
   {ID_MENUITEM_GENERATEPASSWORD, true, true, true, true},
   {ID_MENUITEM_YUBIKEY, true, false, true, false},
+  {ID_MENUITEM_SETDBID, true, true, true, false},
   {ID_MENUITEM_PSWD_POLICIES, true, true, true, false},
   // Help Menu
   {ID_MENUITEM_PWSAFE_WEBSITE, true, true, true, true},
@@ -712,31 +730,24 @@ void DboxMain::InitPasswordSafe()
   PWS_LOGIT;
 
   PWSprefs *prefs = PWSprefs::GetInstance();
+
   // Real initialization done here
   // Requires OnInitDialog to have passed OK
   UpdateAlwaysOnTop();
-  UpdateSystemMenu();
-
-  // ... same for UseSystemTray
-  // StartSilent trumps preference (but StartClosed doesn't)
-  if (!m_IsStartSilent && !prefs->GetPref(PWSprefs::UseSystemTray))
-    app.HideIcon();
 
   m_RUEList.SetMax(prefs->GetPref(PWSprefs::MaxREItems));
 
-  const int32 iPWSHotKeyValue = int32(prefs->GetPref(PWSprefs::HotKey));
-  WORD wVirtualKeyCode =  iPWSHotKeyValue & 0xff;
-  WORD wHKModifiers = iPWSHotKeyValue >> 16;
-    
-  // Translate from CHotKeyCtrl to CWnd & PWS modifiers
-  WORD wModifiers = ConvertModifersMFC2Windows(wHKModifiers);
-  WORD wPWSModifiers = ConvertModifersMFC2PWS(wHKModifiers);
-  int iAppShortcut = (wPWSModifiers << 16) + wVirtualKeyCode;
-  m_core.SetAppHotKey(iAppShortcut);
+  const int32 iAppHotKeyValue = int32(prefs->GetPref(PWSprefs::HotKey));
+  m_core.SetAppHotKey(iAppHotKeyValue);
 
   // Set Hotkey, if active
   if (prefs->GetPref(PWSprefs::HotKeyEnabled)) {
-    RegisterHotKey(m_hWnd, PWS_HOTKEY_ID, UINT(wModifiers), UINT(wVirtualKeyCode));
+    WORD wAppVirtualKeyCode = iAppHotKeyValue & 0xff;
+    WORD wAppPWSModifiers = iAppHotKeyValue >> 16;
+    // Translate from PWS to Windows modifiers
+    WORD wAppModifiers = ConvertModifersPWS2Windows(wAppPWSModifiers);
+
+    RegisterHotKey(m_hWnd, PWS_HOTKEY_ID, UINT(wAppModifiers), UINT(wAppVirtualKeyCode));
     // Registration might fail if combination already registered elsewhere,
     // but don't see any elegant way to notify the user here, so fail silently
   } else {
@@ -762,7 +773,7 @@ void DboxMain::InitPasswordSafe()
   bitmap.GetBitmap(&bm);
   
   m_pImageList = new CImageList();
-  // Number (12) corresponds to number in CPWTreeCtrl public enum
+
   BOOL status = m_pImageList->Create(bm.bmWidth, bm.bmHeight, 
                                      ILC_MASK | ILC_COLORDDB, 
                                      CPWTreeCtrl::NUM_IMAGES, 0);
@@ -806,7 +817,8 @@ void DboxMain::InitPasswordSafe()
 
   m_ctlItemList.SetExtendedStyle(dw_ExtendedStyle);
   m_ctlItemList.Initialize();
-  m_ctlItemList.SetHighlightChanges(prefs->GetPref(PWSprefs::HighlightChanges));
+  m_ctlItemList.SetHighlightChanges(prefs->GetPref(PWSprefs::HighlightChanges) &&
+                                    !prefs->GetPref(PWSprefs::SaveImmediately));
 
   // Override default HeaderCtrl ID of 0
   m_LVHdrCtrl.SetDlgCtrlID(IDC_LIST_HEADER);
@@ -814,66 +826,19 @@ void DboxMain::InitPasswordSafe()
   // Initialise DropTargets - should be in OnCreate()s, really
   m_LVHdrCtrl.Initialize(&m_LVHdrCtrl);
   m_ctlItemTree.Initialize();
-  m_ctlItemTree.SetHighlightChanges(prefs->GetPref(PWSprefs::HighlightChanges));
 
   // Set up fonts before playing with Tree/List views
+  SetupUserFonts();
 
-  // Get current font (as specified in .rc file for IDD_PASSWORDSAFE_DIALOG) & save it
-  // If it's not available, fall back to font used in pre-3.18 versions, rather than
-  // 'System' default.
-  CFont *pCurrentFont = GetFont();
-  pCurrentFont->GetLogFont(&dfltTreeListFont);
-
-  CString szTreeFont = prefs->GetPref(PWSprefs::TreeFont).c_str();
   Fonts *pFonts = Fonts::GetInstance();
 
-  // If we didn't find font specified in rc, and user didn't select anything
-  // fallback to MS Sans Serif
-  if (CString(dfltTreeListFont.lfFaceName) == L"System" &&
-      szTreeFont.IsEmpty()) {
-    const CString MS_SanSerif8 = L"-11,0,0,0,400,0,0,0,177,1,2,1,34,MS Sans Serif";
-    szTreeFont = MS_SanSerif8;
-    pFonts->ExtractFont(szTreeFont, dfltTreeListFont); // Save for 'Reset font' action
-  }
-  
-  LOGFONT tree_lf;
-  if (!szTreeFont.IsEmpty()) { // either preference or our own fallback
-    pFonts->ExtractFont(szTreeFont, tree_lf);
-    pFonts->SetCurrentFont(&tree_lf);
-  } else {
-    pFonts->SetCurrentFont(&dfltTreeListFont);
-  }
+  // Verify protect and attachment symbols supported
+  pFonts->VerifySymbolsSupported();
 
-  // Set up Password font too.
-  CString szPasswordFont = prefs->GetPref(PWSprefs::PasswordFont).c_str();
-
-  if (!szPasswordFont.IsEmpty()) {
-    LOGFONT Passwordfont;
-    pFonts->ExtractFont(szPasswordFont, Passwordfont);
-    pFonts->SetPasswordFont(&Passwordfont);
-  } else {
-    // Not set - use default password font
-    pFonts->SetPasswordFont(NULL);
-  }
-
-  // Set up Notes font too.
-  CString szNotesFont = prefs->GetPref(PWSprefs::NotesFont).c_str();
-
-  if (!szNotesFont.IsEmpty()) {
-    LOGFONT NotesFont;
-    pFonts->ExtractFont(szNotesFont, NotesFont);
-    pFonts->SetNotesFont(&NotesFont);
-  } else {
-    // Not set - use tree/list font set above
-    LOGFONT LF;
-    pFonts->GetCurrentFont(&LF);
-    pFonts->SetNotesFont(&LF);
-  }
-
-  // transfer the fonts to the tree windows
+  // Transfer the fonts to the tree windows
   m_ctlItemTree.SetUpFont();
   m_ctlItemList.SetUpFont();
-  m_LVHdrCtrl.SetFont(pFonts->GetCurrentFont());
+  m_LVHdrCtrl.SetFont(pFonts->GetTreeListFont());
 
   const CString lastView = prefs->GetPref(PWSprefs::LastView).c_str();
   if (lastView != L"list")
@@ -887,41 +852,18 @@ void DboxMain::InitPasswordSafe()
   CString cs_ListColumnsWidths = prefs->GetPref(PWSprefs::ColumnWidths).c_str();
 
   if (cs_ListColumns.IsEmpty())
-    SetColumns();
+    SetDefaultColumns();
   else
     SetColumns(cs_ListColumns);
 
-  m_iTypeSortColumn = prefs->GetPref(PWSprefs::SortedColumn);
-  switch (m_iTypeSortColumn) {
-    case CItemData::UUID:  // Used for sorting on Image!
-    case CItemData::GROUP:
-    case CItemData::TITLE:
-    case CItemData::USER:
-    case CItemData::NOTES:
-    case CItemData::PASSWORD:
-    case CItemData::CTIME:
-    case CItemData::PMTIME:
-    case CItemData::ATIME:
-    case CItemData::XTIME:
-    case CItemData::XTIME_INT:
-    case CItemData::RMTIME:
-    case CItemData::URL:
-    case CItemData::EMAIL:
-    case CItemData::SYMBOLS:
-    case CItemData::RUNCMD:
-    case CItemData::AUTOTYPE:
-    case CItemData::POLICY:
-    case CItemData::PROTECTED:
-    case CItemData::KBSHORTCUT:
-      break;
-    case CItemData::PWHIST:  // Not displayed in ListView
-    default:
-      // Title is a mandatory column - so can't go wrong!
-      m_iTypeSortColumn = CItemData::TITLE;
-      break;
-  }
+  CString cs_Header;  /* Not used here but needed for GetHeaderColumnProperties call */
+  int iWidth;         /* Not used here but needed for GetHeaderColumnProperties call */
+  int iType;
+  iType = m_iTypeSortColumn = prefs->GetPref(PWSprefs::SortedColumn);
 
-  // refresh list will add and size password column if necessary...
+  GetHeaderColumnProperties(iType, cs_Header, iWidth, m_iTypeSortColumn);
+
+  // Refresh list will add and size password column if necessary...
   RefreshViews();
 
   setupBars(); // Just to keep things a little bit cleaner
@@ -929,19 +871,6 @@ void DboxMain::InitPasswordSafe()
   ChangeOkUpdate();
 
   DragAcceptFiles(TRUE);
-
-  CRect rect;
-  prefs->GetPrefRect(rect.top, rect.bottom, rect.left, rect.right);
-  
-  HRGN hrgnWork = GetWorkAreaRegion();
-  // also check that window will be visible
-  if ((rect.top == -1 && rect.bottom == -1 && rect.left == -1 && rect.right == -1) || !RectInRegion(hrgnWork, rect)){
-    GetWindowRect(&rect);
-    SendMessage(WM_SIZE, SIZE_RESTORED, MAKEWPARAM(rect.Width(), rect.Height()));
-  } else {
-    PlaceWindow(this, &rect, SW_HIDE);
-  }
-  ::DeleteObject(hrgnWork);
 
   // Now do widths!
   if (!cs_ListColumns.IsEmpty())
@@ -953,7 +882,12 @@ void DboxMain::InitPasswordSafe()
     // failed
     delete m_pNotesDisplay;
     m_pNotesDisplay = NULL;
+  } else {
+    // Set up user font
+    CFont *pNotes = Fonts::GetInstance()->GetNotesFont();
+    m_pNotesDisplay->SetWindowTextFont(pNotes);
   }
+  
 #if !defined(USE_XML_LIBRARY)
   // Don't support filter processing if we can't validate
 #else
@@ -982,7 +916,7 @@ void DboxMain::InitPasswordSafe()
       CGeneralMsgBox gmb;
       CString cs_title, cs_msg, cs_temp;
       cs_temp.Format(IDSC_MISSINGXSD, L"pwsafe_filter.xsd");
-      cs_msg.Format(IDS_CANTAUTOIMPORTFILTERS, cs_temp);
+      cs_msg.Format(IDS_CANTAUTOIMPORTFILTERS, static_cast<LPCWSTR>(cs_temp));
       cs_title.LoadString(IDSC_CANTVALIDATEXML);
       gmb.MessageBox(cs_msg, cs_title, MB_OK | MB_ICONSTOP);
       return;
@@ -991,7 +925,7 @@ void DboxMain::InitPasswordSafe()
     MFCAsker q;
     int rc;
     CWaitCursor waitCursor;  // This may take a while!
-    rc = m_MapFilters.ImportFilterXMLFile(FPOOL_AUTOLOAD, L"",
+    rc = m_MapAllFilters.ImportFilterXMLFile(FPOOL_AUTOLOAD, L"",
                                           wsAutoLoad,
                                           XSDFilename.c_str(), strErrors, &q);
     waitCursor.Restore();  // Restore normal cursor
@@ -1005,6 +939,92 @@ void DboxMain::InitPasswordSafe()
 #endif
 }
 
+void DboxMain::SetupUserFonts()
+{
+  PWSprefs *prefs = PWSprefs::GetInstance();
+  Fonts *pFonts = Fonts::GetInstance();
+
+  LOGFONT LF;
+  int iFontSize;
+  std::wstring szFontPrefString;
+
+  // Get resolution
+  HDC hDC = ::GetWindowDC(GetSafeHwnd());
+  const int Ypixels = GetDeviceCaps(hDC, LOGPIXELSY);
+  ::ReleaseDC(GetSafeHwnd(), hDC);
+
+  // Set up Tree/list font.
+  szFontPrefString = prefs->GetPref(PWSprefs::TreeFont).c_str();
+
+  if (!szFontPrefString.empty() && pFonts->ExtractFont(szFontPrefString, LF)) {
+    iFontSize = prefs->GetPref(PWSprefs::TreeFontPtSz);
+    if (iFontSize == 0) {
+      iFontSize = -MulDiv(LF.lfHeight, 72, Ypixels) * 10;
+      prefs->SetPref(PWSprefs::TreeFontPtSz, iFontSize);
+    }
+    pFonts->SetTreeListFont(&LF, iFontSize);
+  } else {
+    // Not set - use Tree/List dialog font
+    pFonts->GetDefaultTreeListFont(LF);
+    iFontSize = -MulDiv(LF.lfHeight, 72, Ypixels) * 10;
+    prefs->SetPref(PWSprefs::TreeFontPtSz, iFontSize);
+    pFonts->SetTreeListFont(&LF, iFontSize);
+  }
+
+  // Set up Add/Edit font too.
+  szFontPrefString = prefs->GetPref(PWSprefs::AddEditFont).c_str();
+
+  if (!szFontPrefString.empty() && pFonts->ExtractFont(szFontPrefString, LF)) {
+    iFontSize = prefs->GetPref(PWSprefs::AddEditFontPtSz);
+    if (iFontSize == 0) {
+      iFontSize = -MulDiv(LF.lfHeight, 72, Ypixels) * 10;
+      prefs->SetPref(PWSprefs::AddEditFontPtSz, iFontSize);
+    }
+    pFonts->SetAddEditFont(&LF, iFontSize);
+  } else {
+    // Not set - use Add/Edit dialog font
+    pFonts->GetDefaultAddEditFont(LF);
+    iFontSize = -MulDiv(LF.lfHeight, 72, Ypixels) * 10;
+    prefs->SetPref(PWSprefs::AddEditFontPtSz, iFontSize);
+    pFonts->SetAddEditFont(&LF, iFontSize);
+  }
+
+  // Set up Password font too.
+  szFontPrefString = prefs->GetPref(PWSprefs::PasswordFont).c_str();
+
+  if (!szFontPrefString.empty() && pFonts->ExtractFont(szFontPrefString, LF)) {
+    iFontSize = prefs->GetPref(PWSprefs::PasswordFontPtSz);
+    if (iFontSize == 0) {
+      iFontSize = -MulDiv(LF.lfHeight, 72, Ypixels) * 10;
+      prefs->SetPref(PWSprefs::PasswordFontPtSz, iFontSize);
+    }
+    pFonts->SetPasswordFont(&LF, iFontSize);
+  } else {
+    // Not set - use default password font
+    pFonts->SetPasswordFont(NULL, 0);
+    iFontSize = -MulDiv(-16, 72, Ypixels) * 10;
+    prefs->SetPref(PWSprefs::PasswordFontPtSz, iFontSize);
+  }
+
+  // Set up Notes font too.
+  szFontPrefString = prefs->GetPref(PWSprefs::NotesFont).c_str();
+
+  if (!szFontPrefString.empty() && pFonts->ExtractFont(szFontPrefString, LF)) {
+    iFontSize = prefs->GetPref(PWSprefs::NotesFontPtSz);
+    if (iFontSize == 0) {
+      iFontSize = -MulDiv(LF.lfHeight, 72, Ypixels) * 10;
+      prefs->SetPref(PWSprefs::NotesFontPtSz, iFontSize);
+    }
+    pFonts->SetNotesFont(&LF, iFontSize);
+  } else {
+    // Not set - use Add/Edit font set
+    pFonts->GetDefaultAddEditFont(LF);
+    iFontSize = -MulDiv(LF.lfHeight, 72, Ypixels) * 10;
+    prefs->SetPref(PWSprefs::NotesFontPtSz, iFontSize);
+    pFonts->SetNotesFont(&LF, iFontSize);
+  }
+}
+
 LRESULT DboxMain::OnHotKey(WPARAM wParam, LPARAM )
 {
   // The main hotkey is used to invoke the app window, prompting
@@ -1014,7 +1034,7 @@ LRESULT DboxMain::OnHotKey(WPARAM wParam, LPARAM )
 
     // Because LockDataBase actually doesn't minimize the window,
     // have to also use the current state i.e. Locked
-    if (app.GetSystemTrayState() == LOCKED || IsIconic()) {
+    if (m_TrayLockedState == LOCKED || IsIconic()) {
       SendMessage(WM_COMMAND, ID_MENUITEM_RESTORE);
     }
 
@@ -1034,7 +1054,10 @@ LRESULT DboxMain::OnHeaderDragComplete(WPARAM /* wParam */, LPARAM /* lParam */)
   }
 
   // Now update header info
-  SetHeaderInfo();
+  SetHeaderInfo(false);
+
+  // Restore saved column widths
+  RestoreColumnWidths();
 
   return 0L;
 }
@@ -1050,10 +1073,14 @@ LRESULT DboxMain::OnCCToHdrDragComplete(WPARAM wType, LPARAM afterIndex)
   AddColumn((int)wType, (int)afterIndex);
 
   // Reset values
-  SetHeaderInfo();
+  SetHeaderInfo(false);
+
+  // Update row height if added Notes column
+  if (wType == CItemData::NOTES)
+    m_ctlItemList.UpdateRowHeight(true);
 
   // Now show the user
-  RefreshViews(iListOnly);
+  RefreshViews(LISTONLY);
 
   return 0L;
 }
@@ -1069,10 +1096,16 @@ LRESULT DboxMain::OnHdrToCCDragComplete(WPARAM wType, LPARAM /* lParam */)
   DeleteColumn((int)wType);
 
   // Reset values
-  SetHeaderInfo();
+  SetHeaderInfo(false);
+
+  RestoreColumnWidths();
+
+  // Update row height if deleted Notes column
+  if (wType == CItemData::NOTES)
+    m_ctlItemList.UpdateRowHeight(true);
 
   // Now show the user
-  RefreshViews(iListOnly);
+  RefreshViews(LISTONLY);
 
   return 0L;
 }
@@ -1082,6 +1115,30 @@ BOOL DboxMain::OnInitDialog()
   PWS_LOGIT;
 
   CDialog::OnInitDialog();
+
+  if (m_pfcnSetLayeredWindowAttributes) {
+    m_bOnStartupTransparancyEnabled =
+      PWSprefs::GetInstance()->GetPref(PWSprefs::EnableWindowTransparency);
+  }
+
+  // Only do after above OnInitDialog otherwise window will not have been created
+  SetLayered((CWnd *)this);
+
+  m_LockedIcon = app.LoadIcon(IDI_LOCKEDICON);
+  m_UnLockedIcon = app.LoadIcon(IDI_UNLOCKEDICON);
+
+  m_ClosedIcon = app.LoadIcon(IDI_CORNERICON);
+  auto initialIcon = m_core.IsDbOpen() ? m_LockedIcon : m_ClosedIcon;
+  m_pTrayIcon = new CSystemTray(this, PWS_MSG_ICON_NOTIFY, L"PasswordSafe",
+                                initialIcon, m_RUEList,
+                                PWS_MSG_ICON_NOTIFY, IDR_POPTRAY);
+  
+  m_pTrayIcon->SetTarget(this);
+
+  // Hide icon if pref not set, unless '-s' in commandline
+  if (m_InitMode != SilentInit &&
+      !PWSprefs::GetInstance()->GetPref(PWSprefs::UseSystemTray))
+    HideIcon();
 
   // Set up UPDATE_UI data map.
   const int num_CommandTable_entries = _countof(m_UICommandTable);
@@ -1093,7 +1150,7 @@ BOOL DboxMain::OnInitDialog()
   m_menuTipManager.Install(this);
 
   // Subclass the ListView HeaderCtrl
-  CHeaderCtrl* pHeader = m_ctlItemList.GetHeaderCtrl();
+  CHeaderCtrl *pHeader = m_ctlItemList.GetHeaderCtrl();
   if (pHeader && pHeader->GetSafeHwnd()) {
     m_LVHdrCtrl.SubclassWindow(pHeader->GetSafeHwnd());
   }
@@ -1103,74 +1160,69 @@ BOOL DboxMain::OnInitDialog()
   SetLocalStrings();
   ConfigureSystemMenu();
   SetMenu(app.GetMainMenu());  // Now show menu...
-
+  SetDragbarToolTips();
+  
   InitPasswordSafe();
 
-  if (m_IsStartSilent) {
-    m_bStartHiddenAndMinimized = true;
-  }
-
-  if (m_IsStartClosed) {
-    Close();
-    if (!m_IsStartSilent)
-      ShowWindow(SW_SHOW);
-  }
-
   BOOL bOOI(TRUE);
-  if (!m_IsStartClosed && !m_IsStartSilent) {
-    if (m_bSetup) { // --setup flag passed?
-      // If default dbase exists, DO NOT overwrite it, else
-      // prompt for new combination, create it.
-      // Meant for use when running after install
-      CString cf(MAKEINTRESOURCE(IDS_DEFDBNAME));
-      std::wstring fname = PWSUtil::GetNewFileName(LPCWSTR(cf),
-                                                   DEFAULT_SUFFIX);
-      std::wstring dir = PWSdirs::GetSafeDir();
-      if (dir[dir.length()-1] != TCHAR('\\')) dir += L"\\";
-      fname = dir + fname;
-      if (pws_os::FileExists(fname)) 
-        bOOI = OpenOnInit();
-      else { // really first install!
-        CSecString sPasskey;
-        CPasskeySetup dbox_pksetup(this, m_core);
-        INT_PTR rc = dbox_pksetup.DoModal();
-
-        if (rc == IDOK)
-          sPasskey = dbox_pksetup.GetPassKey();
-        else {
-          PostQuitMessage(0);
-          return FALSE;
-        }
-
-        m_core.SetCurFile(fname.c_str());
-        m_core.NewFile(sPasskey);
-        m_core.SetReadOnly(false); 
-        rc = m_core.WriteCurFile();
-        if (rc == PWScore::CANT_OPEN_FILE) {
-          CGeneralMsgBox gmb;
-          CString cs_temp, cs_title(MAKEINTRESOURCE(IDS_FILEWRITEERROR));
-          cs_temp.Format(IDS_CANTOPENWRITING, m_core.GetCurFile().c_str());
-          gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONWARNING);
-          PostQuitMessage(0); // can we do something better here?
-          return FALSE;
-        }
-      } // first install
-    } else
+  if (!m_bSetup) { // --setup flag not passed (common case)
+    if (m_InitMode == NormalInit)
       bOOI = OpenOnInit();
-    // No need for another RefreshViews as OpenOnInit does one via PostOpenProcessing
-  }
+  } else { // --setup flag passed (post install/upgrade)
+    // If default dbase exists, DO NOT overwrite it, else
+    // prompt for new combination, create it.
+    CString cf(MAKEINTRESOURCE(IDS_DEFDBNAME));
+    std::wstring fname = PWSUtil::GetNewFileName(LPCWSTR(cf),
+                                                 DEFAULT_SUFFIX);
+    std::wstring dir = PWSdirs::GetSafeDir();
+    if (dir[dir.length()-1] != L'\\') dir += L"\\";
+    fname = dir + fname;
+    if (!pws_os::FileExists(fname)) { // really first install!
+      CSecString sPasskey;
+      CPasskeySetup dbox_pksetup(this, m_core);
+      INT_PTR rc = dbox_pksetup.DoModal();
+
+      if (rc == IDOK)
+        sPasskey = dbox_pksetup.GetPassKey();
+      else {
+        PostQuitMessage(0);
+        return TRUE;  // return TRUE unless you set the focus to a control
+      }
+
+      m_core.SetCurFile(fname.c_str());
+      m_core.NewFile(sPasskey);
+      m_core.SetReadOnly(false); 
+      rc = m_core.WriteCurFile();
+      if (rc == PWScore::CANT_OPEN_FILE) {
+        CGeneralMsgBox gmb;
+        CString cs_temp, cs_title(MAKEINTRESOURCE(IDS_FILEWRITEERROR));
+        cs_temp.Format(IDS_CANTOPENWRITING, m_core.GetCurFile().c_str());
+        gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONWARNING);
+        PostQuitMessage(0); // can we do something better here?
+        return TRUE;  // return TRUE unless you set the focus to a control
+      }
+      PostOpenProcessing();
+    } else { // first install, but file exists - i.e., an upgrade
+      bOOI = OpenOnInit();
+    }
+  } // --setup flag handling
+  
+  //  if (m_IsStartNoDB)
+  //Close();
+  if (m_InitMode != SilentInit)
+    ShowWindow(SW_SHOW);
 
   // Check if user cancelled
   if (bOOI == FALSE) {
     PostQuitMessage(0);
-    return FALSE;
+    return TRUE;  // return TRUE unless you set the focus to a control
   }
 
   SetInitialDatabaseDisplay();
   if (m_bOpen && PWSprefs::GetInstance()->GetPref(PWSprefs::ShowFindToolBarOnOpen))
-    SetFindToolBar(true);
+    OnShowFindToolbar();
   else
-    OnHideFindToolBar();
+    OnHideFindToolbar();
 
   if (m_bOpen) {
     SelectFirstEntry();
@@ -1183,13 +1235,147 @@ BOOL DboxMain::OnInitDialog()
     gmb.AfxMessageBox(IDS_CANTLOAD_AUTOTYPEDLL, MB_ICONERROR);
   }
 
-  // Set up DragBar Tooltips
-  SetDragbarToolTips();
-
   // Update Minidump user streams
   app.SetMinidumpUserStreams(m_bOpen, !IsDBReadOnly());
 
   return TRUE;  // return TRUE unless you set the focus to a control
+}
+
+void DboxMain::OnSetDBID()
+{
+  CSetDBID SBIdlg((CWnd *)this, m_iDBIndex);
+
+  INT_PTR rc = SBIdlg.DoModal();
+
+  if (rc != -1) {
+    // Index may have changed
+    if (m_iDBIndex != rc) {
+      // Clear current one if it exists
+      if (m_hMutexDBIndex != NULL) {
+        CloseHandle(m_hMutexDBIndex);
+        m_hMutexDBIndex = NULL;
+      }
+
+      // Remember mutex handle to close on DB close or assignment of new index
+      m_hMutexDBIndex = SBIdlg.GetMutexHandle();
+    }
+
+    // Colour may have changed
+    m_DBLockedIndexColour = SBIdlg.GetLockedIndexColour();
+    m_DBUnlockedIndexColour = SBIdlg.GetUnlockedIndexColour();
+
+    m_iDBIndex = (int)rc;
+    UpdateSystemTray(m_TrayLockedState == LOCKED ? LOCKED : UNLOCKED);
+  }
+}
+
+HICON DboxMain::CreateIcon(const HICON &hIcon, const int &iIndex, const COLORREF clrText)
+{
+  CString csValue;
+  csValue.Format(L"%2d", iIndex);
+
+  HDC hDc = ::GetDC(NULL);
+  HDC hMemDC = ::CreateCompatibleDC(hDc);
+
+  // Load up background icon
+  ICONINFO ii = { 0 };
+  ::GetIconInfo(hIcon, &ii);
+
+  HGDIOBJ hOldBmp = ::SelectObject(hMemDC, ii.hbmColor);
+
+  // Create font
+  LOGFONT lf = { 0 };
+  lf.lfHeight = -22;
+  lf.lfWeight = FW_NORMAL;
+  lf.lfOutPrecision = PROOF_QUALITY;
+  lf.lfQuality = ANTIALIASED_QUALITY;
+  wmemset(lf.lfFaceName, 0, LF_FACESIZE);
+  lstrcpy(lf.lfFaceName, L"Arial Black");
+
+  HFONT hFont = ::CreateFontIndirect(&lf);
+  HGDIOBJ hOldFont = ::SelectObject(hMemDC, hFont);
+
+  // Write text - Do NOT use SetTextAlign
+  ::SetBkMode(hMemDC, TRANSPARENT);
+  ::SetTextColor(hMemDC, clrText);
+  ::TextOut(hMemDC, 0, 0, (LPCWSTR)csValue, 2);
+
+  // Set up mask
+  HDC hMaskDC = ::CreateCompatibleDC(hDc);
+  HGDIOBJ hOldMaskBmp = ::SelectObject(hMaskDC, ii.hbmMask);
+
+  // Also write text on here - Do NOT use SetTextAlign
+  HGDIOBJ hOldMaskFont = ::SelectObject(hMaskDC, hFont);
+  ::SetBkMode(hMaskDC, TRANSPARENT);
+  ::SetTextColor(hMaskDC, clrText);
+  ::TextOut(hMaskDC, 0, 0, (LPCWSTR)csValue, 2);
+
+  HBITMAP hMaskBmp = (HBITMAP)::SelectObject(hMaskDC, hOldMaskBmp);
+
+  ICONINFO ii2 = { 0 };
+  ii2.fIcon = TRUE;
+  ii2.hbmMask = hMaskBmp;
+  ii2.hbmColor = ii.hbmColor;
+
+  // Create updated icon
+  HICON hIndexIcon = ::CreateIconIndirect(&ii2);
+
+  // Cleanup bitmap mask
+  ::DeleteObject(hMaskBmp);
+  ::DeleteDC(hMaskDC);
+
+  // Cleanup font
+  ::SelectObject(hMaskDC, hOldMaskFont);
+  ::SelectObject(hMemDC, hOldFont);
+  ::DeleteObject(hFont);
+
+  // Release background bitmap
+  ::SelectObject(hMemDC, hOldBmp);
+
+  // Delete background icon bitmap info
+  ::DeleteObject(ii.hbmColor);
+  ::DeleteObject(ii.hbmMask);
+
+  ::DeleteDC(hMemDC);
+  ::ReleaseDC(NULL, hDc);
+
+  return hIndexIcon;
+}
+
+void DboxMain::SetSystemTrayState(DBSTATE state)
+{
+  // need to protect against null m_pTrayIcon due to
+  // tricky initialization order
+  int iDBIndex = GetDBIndex();
+  if (m_pTrayIcon != NULL) {
+    m_TrayLockedState = state;
+    HICON hIcon(m_LockedIcon);
+    switch (state) {
+    case LOCKED:
+      hIcon = m_LockedIcon;
+      break;
+    case UNLOCKED:
+      hIcon = m_UnLockedIcon;
+      break;
+    case CLOSED:
+      hIcon = m_ClosedIcon;
+      m_iDBIndex = 0;
+      break;
+    default:
+      break;
+    }
+
+    if (iDBIndex != 0 && state != CLOSED) {
+      m_iDBIndex = iDBIndex;
+      ::DestroyIcon(m_IndexIcon);
+
+      COLORREF clrText = state == LOCKED ? m_DBLockedIndexColour : m_DBUnlockedIndexColour;
+      m_IndexIcon = CreateIcon(hIcon, iDBIndex, clrText);
+      m_pTrayIcon->SetIcon(m_IndexIcon);
+    } else {
+      m_pTrayIcon->SetIcon(hIcon);
+    }
+  }
 }
 
 void DboxMain::SetDragbarToolTips()
@@ -1233,27 +1419,27 @@ void DboxMain::SetDragbarToolTips()
     // Set 
     CString cs_ToolTip, cs_field;
     cs_field.LoadString(IDS_GROUP);
-    cs_ToolTip.Format(IDS_DRAGTOCOPY, cs_field);
+    cs_ToolTip.Format(IDS_DRAGTOCOPY, static_cast<LPCWSTR>(cs_field));
     m_pToolTipCtrl->AddTool(GetDlgItem(IDC_STATIC_DRAGGROUP), cs_ToolTip);
     cs_field.LoadString(IDS_TITLE);
-    cs_ToolTip.Format(IDS_DRAGTOCOPY, cs_field);
+    cs_ToolTip.Format(IDS_DRAGTOCOPY, static_cast<LPCWSTR>(cs_field));
     m_pToolTipCtrl->AddTool(GetDlgItem(IDC_STATIC_DRAGTITLE), cs_ToolTip);
     cs_field.LoadString(IDS_USERNAME);
-    cs_ToolTip.Format(IDS_DRAGTOCOPY, cs_field);
+    cs_ToolTip.Format(IDS_DRAGTOCOPY, static_cast<LPCWSTR>(cs_field));
     m_pToolTipCtrl->AddTool(GetDlgItem(IDC_STATIC_DRAGUSER), cs_ToolTip);
     cs_field.LoadString(IDS_PASSWORD);
-    cs_ToolTip.Format(IDS_DRAGTOCOPY, cs_field);
+    cs_ToolTip.Format(IDS_DRAGTOCOPY, static_cast<LPCWSTR>(cs_field));
     m_pToolTipCtrl->AddTool(GetDlgItem(IDC_STATIC_DRAGPASSWORD), cs_ToolTip);
     cs_field.LoadString(IDS_NOTES);
-    cs_ToolTip.Format(IDS_DRAGTOCOPY, cs_field);
+    cs_ToolTip.Format(IDS_DRAGTOCOPY, static_cast<LPCWSTR>(cs_field));
     m_pToolTipCtrl->AddTool(GetDlgItem(IDC_STATIC_DRAGNOTES), cs_ToolTip);
     cs_field.LoadString(IDS_URL);
-    cs_ToolTip.Format(IDS_DRAGTOCOPY, cs_field);
+    cs_ToolTip.Format(IDS_DRAGTOCOPY, static_cast<LPCWSTR>(cs_field));
     m_pToolTipCtrl->AddTool(GetDlgItem(IDC_STATIC_DRAGURL), cs_ToolTip);
     cs_field.LoadString(IDS_EMAIL);
-    cs_ToolTip.Format(IDS_DRAGTOCOPY, cs_field);
+    cs_ToolTip.Format(IDS_DRAGTOCOPY, static_cast<LPCWSTR>(cs_field));
     m_pToolTipCtrl->AddTool(GetDlgItem(IDC_STATIC_DRAGEMAIL), cs_ToolTip);
-    cs_ToolTip.Format(IDS_DRAGTOAUTOTYPE, cs_field);
+    cs_ToolTip.Format(IDS_DRAGTOAUTOTYPE, static_cast<LPCWSTR>(cs_field));
     m_pToolTipCtrl->AddTool(GetDlgItem(IDC_STATIC_DRAGAUTO), cs_ToolTip);    
   }
 }
@@ -1282,11 +1468,14 @@ void DboxMain::SetInitialDatabaseDisplay()
 
 void DboxMain::OnDestroy()
 {
-  const std::wstring filename(m_core.GetCurFile().c_str());
+  if (m_pTrayIcon != nullptr)
+    m_pTrayIcon->RemoveIcon();
+  ::DestroyIcon(m_LockedIcon);
+  ::DestroyIcon(m_UnLockedIcon);
+  ::DestroyIcon(m_ClosedIcon);
+  ::DestroyIcon(m_IndexIcon);
 
-  // The only way we're the locker is if it's locked & we're !readonly
-  if (!filename.empty() && !m_core.IsReadOnly() && m_core.IsLockedFile(filename))
-    m_core.UnlockFile(filename);
+  m_core.SafeUnlockCurFile();
 
   // Get rid of hotkey
   UnregisterHotKey(GetSafeHwnd(), PWS_HOTKEY_ID);
@@ -1309,22 +1498,115 @@ void DboxMain::OnDestroy()
 
 void DboxMain::OnWindowPosChanging(WINDOWPOS* lpwndpos)
 {
-  if (m_bStartHiddenAndMinimized) {
+  /**
+   * Following hack is to cause the main window to be minimized upon startup
+   * when so specified by user (-s or -m cli args)
+   * Used to work without countDown/oneShot logic, but something changed
+   * that caused this to be called multiple time before it would actually take effect
+   * hence the current kludge.
+   * The Right Thing would be to separate the startup flows completely, delaying the
+   * creation of the main window until appropriate, but that's major rocket surgery
+   * at this stage...
+   */
+  static int countDown = 5;
+  static bool oneShot = false;
+  if ((m_InitMode == SilentInit || m_InitMode == MinimizedInit) &&
+      !oneShot && --countDown == 0) {
+    oneShot = true;
+    // Here's where we enforce the '-m/s' flag
+    // semantics, causing main window to minimize ASAP.
     lpwndpos->flags |= (SWP_HIDEWINDOW | SWP_NOACTIVATE);
     lpwndpos->flags &= ~SWP_SHOWWINDOW;
     PostMessage(WM_COMMAND, ID_MENUITEM_MINIMIZE);
   }
-
   CDialog::OnWindowPosChanging(lpwndpos);
 }
 
 void DboxMain::Execute(Command *pcmd, PWScore *pcore)
 {
+  DoCommand(pcmd, pcore, false);
+}
+
+void DboxMain::OnUndo()
+{
+  DoCommand(NULL, NULL, true);
+}
+
+void DboxMain::OnRedo()
+{
+  DoCommand(NULL, NULL, false);
+}
+
+void DboxMain::DoCommand(Command *pcmd, PWScore *pcore, const bool bUndo)
+{
+  // If pcmd != NULL then Execute
+  // If pcmd == NULL and bUndo == true  then Undo
+  // If pcmd == NULL and bUndo == false then Redo
+
+  BOOL bLocked(FALSE);
+  m_iNeedRefresh = NONE;
+
+  if (!m_bSuspendGUIUpdates) {
+    m_ctlItemList.SetRedraw(FALSE);
+    m_ctlItemTree.SetRedraw(FALSE);
+
+    // Can only lock one Window at a time - pick the one currently visible
+    if (m_ctlItemList.IsWindowVisible())
+      bLocked = m_ctlItemList.LockWindowUpdate();
+    else
+      bLocked = m_ctlItemTree.LockWindowUpdate();
+
+    m_bSuspendGUIUpdates = true;
+  }
+
   if (pcore == NULL)
     pcore = &m_core;
 
+  // Get temporary pointer to currrent command to see if a RenameGroupCommand
+  Command *pcommand = pcmd;
+
+  if (pcmd == NULL) {
+    if (bUndo)
+      pcommand = pcore->GetUndoCommand();
+    else
+      pcommand = pcore->GetRedoCommand();
+  }
+
+  m_sxNewPath.clear();
+  StringX sxOldPath(L""), sxNewPath(L"");
+  if (typeid(*pcommand) == typeid(MultiCommands)) {
+    Command *pRGcmd = 
+      dynamic_cast<MultiCommands *>(pcommand)->FindCommand(typeid(RenameGroupCommand));
+    if (pRGcmd != NULL) {
+      ASSERT(dynamic_cast<RenameGroupCommand *>(pRGcmd) != NULL);
+      dynamic_cast<RenameGroupCommand *>(pRGcmd)->GetPaths(sxOldPath, sxNewPath);
+    }
+  }
+
+  // Need to set m_sxNewPath before calling SaveGUIStatus()
+  if (pcmd != NULL) {
+    m_sxNewPath = sxNewPath;
+  } else {
+    if (bUndo) {
+      m_sxNewPath = sxOldPath;
+      pcommand = pcore->GetUndoCommand();
+    } else {
+      m_sxNewPath = sxNewPath;
+      pcommand = pcore->GetRedoCommand();
+    }
+  }
+
   SaveGUIStatus();
-  pcore->Execute(pcmd);
+
+  if (pcmd != NULL) {
+    pcore->Execute(pcmd);
+  } else {
+    if (bUndo) {
+      pcore->Undo();
+    } else {
+      pcore->Redo();
+    }
+  }
 
   // See if we have any special filters active that now do not have any entries
   // to display, which would have meant that the user should not be able to select them,
@@ -1335,22 +1617,24 @@ void DboxMain::Execute(Command *pcmd, PWScore *pcore)
     OnCancelFilter();
   }
 
-  UpdateToolBarDoUndo();
+  if (m_bSuspendGUIUpdates) {
+    // Now unlock Window updates
+    if (bLocked) {
+      if (m_ctlItemList.IsWindowVisible())
+        m_ctlItemList.UnlockWindowUpdate();
+      else
+        m_ctlItemTree.UnlockWindowUpdate();
+    }
 
-  SaveGUIStatusEx(iBothViews);
-}
+    m_ctlItemList.SetRedraw(TRUE);
+    m_ctlItemTree.SetRedraw(TRUE);
 
-void DboxMain::OnUndo()
-{
-  m_core.Undo();
-  
-  // See if we have any special filters active that now do not have any entries
-  // to display, which would have meant that the user should not be able to select them,
-  // we need to cancel them
-  if (m_ctlItemTree.GetCount() == 0 &&
-      (CurrentFilter() == m_FilterManager.GetExpireFilter() ||
-       CurrentFilter() == m_FilterManager.GetUnsavedFilter())) {
-    OnCancelFilter();
+    m_bSuspendGUIUpdates = false;
+  }
+
+  if (m_iNeedRefresh != NONE) {
+    RefreshViews(m_iNeedRefresh);
+    m_iNeedRefresh = NONE;
   }
 
   RestoreGUIStatus();
@@ -1359,34 +1643,47 @@ void DboxMain::OnUndo()
   UpdateMenuAndToolBar(m_bOpen);
   UpdateStatusBar();
 
-  SaveGUIStatusEx(iBothViews);
-}
-
-void DboxMain::OnRedo()
-{
-  SaveGUIStatus();
-  m_core.Redo();
-
-  UpdateToolBarDoUndo();
-  UpdateMenuAndToolBar(m_bOpen);
-  UpdateStatusBar();
-
-  SaveGUIStatusEx(iBothViews);
+  SaveGUIStatusEx(BOTHVIEWS);
 }
 
 void DboxMain::FixListIndexes()
 {
-  int N = m_ctlItemList.GetItemCount();
+  std::vector<int> vIndices = m_FindToolBar.GetSearchResults();
+  std::vector<pws_os::CUUID> vFoundUUIDs = m_FindToolBar.GetFoundUUIDS();
+  std::vector<pws_os::CUUID>::iterator it;
+
+  ASSERT(vIndices.size() == vFoundUUIDs.size());
+
+  // Reset all indices
+  vIndices.assign(vIndices.size(), -1);
+
+  const int N = m_ctlItemList.GetItemCount();
   for (int i = 0; i < N; i++) {
     CItemData *pci = (CItemData *)m_ctlItemList.GetItemData(i);
     ASSERT(pci != NULL);
+
+    bool bInFindList(false);
+    size_t ioffset(0);
+    it = std::find(vFoundUUIDs.begin(), vFoundUUIDs.end(), pci->GetUUID());
+    if (it != vFoundUUIDs.end()) {
+      bInFindList = true;
+      ioffset = it - vFoundUUIDs.begin();
+    }
     if (m_bFilterActive &&
-        !m_FilterManager.PassesFiltering(*pci, m_core))
+        !m_FilterManager.PassesFiltering(*pci, m_core)) {
+      ASSERT(!bInFindList);
       continue;
-    DisplayInfo *pdi = (DisplayInfo *)pci->GetDisplayInfo();
-    ASSERT(pdi != NULL);
+    }
+
+    DisplayInfo *pdi = GetEntryGUIInfo(*pci);
     pdi->list_index = i;
+
+    if (bInFindList)
+      vIndices[ioffset] = i;
   }
+
+  // Now update the real copy
+  m_FindToolBar.SetSearchResults(vIndices);
 }
 
 void DboxMain::OnItemDoubleClick(NMHDR *, LRESULT *pLResult)
@@ -1402,13 +1699,13 @@ void DboxMain::OnItemDoubleClick(NMHDR *, LRESULT *pLResult)
   // TreeView only - use DoubleClick to Expand/Collapse group
   // Skip double clicks near items that not selected (for example, clicks on hierarchy lines)
   if (m_ctlItemTree.IsWindowVisible()) {
-    POINT pt;
-    if(!GetCursorPos(&pt))
-      return;
+    TVHITTESTINFO htinfo = { 0 };
+    CPoint local = ::GetMessagePos();
+    m_ctlItemTree.ScreenToClient(&local);
+    htinfo.pt = local;
+    m_ctlItemTree.HitTest(&htinfo);
 
-    m_ctlItemTree.ScreenToClient(&pt);
-    HTREEITEM hItem = m_ctlItemTree.HitTest(pt);
-    
+    HTREEITEM hItem = htinfo.hItem;
     HTREEITEM hItemSel = m_ctlItemTree.GetSelectedItem();
     
     if (hItem != hItemSel) //Clicked near item, that is different from current
@@ -1500,35 +1797,53 @@ void DboxMain::DoBrowse(const bool bDoAutotype, const bool bSendEmail)
 {
   CItemData *pci = getSelectedItem();
   if (pci != NULL) {
-    StringX sx_pswd;
-    if (pci->IsDependent()) {
-      CItemData *pbci = GetBaseEntry(pci);
-      ASSERT(pbci != NULL);
-      sx_pswd = pbci->GetPassword();
-      if (pci->IsShortcut())
-        pci = pbci;
-    } else
-      sx_pswd = pci->GetPassword();
+    PWSprefs *prefs = PWSprefs::GetInstance();
+    StringX sx_pswd, sx_email, sx_url;
 
+    const CItemData *pbci(NULL);
+    if (pci->IsDependent()) {
+      pbci = GetBaseEntry(pci);
+      ASSERT(pbci != NULL);
+      if (pbci == NULL)
+        return;
+    }
+    sx_pswd     = pci->GetEffectiveFieldValue(CItem::PASSWORD, pbci);
+    sx_url      = pci->GetEffectiveFieldValue(CItem::URL, pbci);
+    sx_email    = pci->GetEffectiveFieldValue(CItem::EMAIL, pbci);
+    
     CString cs_command;
-    if (bSendEmail && !pci->IsEmailEmpty()) {
+    if (bSendEmail && !sx_email.empty()) {
       cs_command = L"mailto:";
-      cs_command += pci->GetEmail().c_str();
+      cs_command += sx_email.c_str();
     } else {
-      cs_command = pci->GetURL().c_str();
+      cs_command = sx_url.c_str();
     }
 
     if (!cs_command.IsEmpty()) {
       const pws_os::CUUID uuid = pci->GetUUID();
       std::vector<size_t> vactionverboffsets;
-      StringX sxautotype = PWSAuxParse::GetAutoTypeString(*pci, m_core,
-                                                          vactionverboffsets);
-      LaunchBrowser(cs_command, sxautotype, vactionverboffsets, bDoAutotype);
+      StringX sx_autotype = PWSAuxParse::GetAutoTypeString(*pci, m_core,
+                                                           vactionverboffsets);
+      LaunchBrowser(cs_command, sx_autotype, vactionverboffsets, bDoAutotype);
 
-      if (PWSprefs::GetInstance()->GetPref(PWSprefs::CopyPasswordWhenBrowseToURL)) {
+      if (prefs->GetPref(PWSprefs::CopyPasswordWhenBrowseToURL)) {
         SetClipboardData(sx_pswd);
         UpdateLastClipboardAction(CItemData::PASSWORD);
       }
+
+      if (bDoAutotype)
+        if (prefs->GetPref(PWSprefs::MinimizeOnAutotype)) {
+          // Need to save display status for when we return from minimize
+          m_vGroupDisplayState = GetGroupDisplayState();
+          OnMinimize();
+        } else {
+          // Don't hide unless shown in System Tray!
+          if (prefs->GetPref(PWSprefs::UseSystemTray))
+            ShowWindow(SW_HIDE);
+          else
+            OnMinimize();
+        }
+
       UpdateAccessTime(uuid);
     }
   }
@@ -1541,53 +1856,6 @@ void DboxMain::OnUpdateNSCommand(CCmdUI *pCmdUI)
   pCmdUI->Enable(FALSE);
 }
 
-void DboxMain::SetStartSilent(bool state)
-{
-  m_IsStartSilent = state;
-  if (state) {
-    // start silent implies use system tray.
-    PWSprefs::GetInstance()->SetPref(PWSprefs::UseSystemTray, true);
-    UpdateSystemMenu();
-  }
-}
-
-void DboxMain::SetChanged(ChangeType changed)
-{
-  PWS_LOGIT_ARGS("changed=%d", changed);
-
-  if (m_core.IsReadOnly())
-    return;
-
-  switch (changed) {
-    case Data:
-      if (PWSprefs::GetInstance()->GetPref(PWSprefs::SaveImmediately) &&
-        !m_bInAddGroup && m_core.GetReadFileVersion() == PWSfile::VCURRENT) {
-        // Don't save if just adding group as it will just 'disappear'!
-        // Or if not the current version of the DB
-        Save();
-      } else {
-        m_core.SetDBChanged(true);
-      }
-      break;
-    case Clear:
-      m_core.SetChanged(false, false);
-      m_bTSUpdated = false;
-      break;
-    case TimeStamp:
-      if (PWSprefs::GetInstance()->GetPref(PWSprefs::MaintainDateTimeStamps))
-        m_bTSUpdated = true;
-      break;
-    case DBPrefs:
-      m_core.SetDBPrefsChanged(true);
-      break;
-    case ClearDBPrefs:
-      m_core.SetDBPrefsChanged(false);
-      break;
-    default:
-      ASSERT(0);
-  }
-}
-
 void DboxMain::ChangeOkUpdate()
 {
   if (!m_bInitDone || 
@@ -1596,14 +1864,13 @@ void DboxMain::ChangeOkUpdate()
 
   CMenu *pmenu = GetMenu();
 
-  // Don't need to worry about R-O, as IsChanged can't be true in this case
+  // Don't need to worry about R-O, as IsDBChanged can't be true in this case
   pmenu->EnableMenuItem(ID_MENUITEM_SAVE,
-    (m_core.IsChanged() || m_core.HaveDBPrefsChanged()) ? MF_ENABLED : MF_GRAYED);
+            m_core.HasDBChanged() ? MF_ENABLED : MF_GRAYED);
   if (m_toolbarsSetup == TRUE) {
     m_MainToolBar.GetToolBarCtrl().EnableButton(ID_MENUITEM_SAVE,
-      (m_core.IsChanged() || m_core.HaveDBPrefsChanged()) ? TRUE : FALSE);
+           m_core.HasDBChanged() ? TRUE : FALSE);
   }
-  UpdateStatusBar();
 }
 
 void DboxMain::OnAbout()
@@ -1616,7 +1883,7 @@ void DboxMain::OnPasswordSafeWebsite()
 {
   HINSTANCE stat = ::ShellExecute(NULL, NULL, L"https://pwsafe.org/",
                               NULL, L".", SW_SHOWNORMAL);
-  if (int(stat) <= 32) {
+  if ((__int64)stat <= 32) {
 #ifdef _DEBUG
     CGeneralMsgBox gmb;
     gmb.AfxMessageBox(L"oops");
@@ -1637,8 +1904,7 @@ int DboxMain::CheckPasskey(const StringX &filename, const StringX &passkey,
 int DboxMain::GetAndCheckPassword(const StringX &filename,
                                   StringX &passkey,
                                   int index,
-                                  int flags,
-                                  PWScore *pcore)
+                                  int flags)
 {
   PWS_LOGIT_ARGS("index=%d; flags=0x%04x", index, flags);
 
@@ -1647,9 +1913,7 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
   //  GCP_NORMAL        (1) OK, CANCEL & HELP buttons
   //  GCP_RESTORE       (2) OK, CANCEL & HELP buttons
   //  GCP_WITHEXIT      (3) OK, CANCEL, EXIT & HELP buttons
-  //  GCB_CHANGEMODE    (4) OK, CANCEL & HELP buttons
-
-  // for adv_type values, see enum in AdvancedDlg.h
+  //  GCP_CHANGEMODE    (4) OK, CANCEL & HELP buttons
 
   // Called for an existing database. Prompt user
   // for password, verify against file. Lock file to
@@ -1669,9 +1933,6 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
     // original thread will continue processing
   }
 
-  if (pcore == 0)
-    pcore = &m_core;
-
   if (!filename.empty()) {
     bool exists = pws_os::FileExists(filename.c_str(), bFileIsReadOnly);
 
@@ -1680,10 +1941,9 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
     } // !exists
   } // !filename.IsEmpty()
 
-
   if (bFileIsReadOnly || bForceReadOnly) {
     // As file is read-only, we must honour it and not permit user to change it
-    pcore->SetReadOnly(true);
+    m_core.SetReadOnly(true);
   }
 
   // set all field bits
@@ -1701,7 +1961,7 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
 
   // Ensure blank DboxMain dialog is not shown if user double-clicks
   // on SystemTray icon when being prompted for passphrase
-  app.SetSystemTrayTarget(m_pPasskeyEntryDlg);
+  SetSystemTrayTarget(m_pPasskeyEntryDlg);
   
   INT_PTR rc = m_pPasskeyEntryDlg->DoModal();
 
@@ -1709,10 +1969,10 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
     DBGMSG("PasskeyEntry returns IDOK\n");
 
     const StringX curFile = m_pPasskeyEntryDlg->GetFileName().GetString();
-    pcore->SetCurFile(curFile);
+    m_core.SetCurFile(curFile);
     if (PWSprefs::GetInstance()->GetPref(PWSprefs::MaxMRUItems) != 0) {
-      extern void RelativizePath(stringT &);
-      stringT cf = curFile.c_str(); // relativize and set pref
+      extern void RelativizePath(std::wstring &);
+      std::wstring cf = curFile.c_str(); // relativize and set pref
       RelativizePath(cf);
       PWSprefs::GetInstance()->SetPref(PWSprefs::CurrentFile, cf.c_str());
     }
@@ -1721,31 +1981,39 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
     passkey = LPCWSTR(m_pPasskeyEntryDlg->GetPasskey());
 
     // This dialog's setting of read-only overrides file dialog
-    bool bIsReadOnly = m_pPasskeyEntryDlg->IsReadOnly();
-    pcore->SetReadOnly(bIsReadOnly);
+    bool bWantReadOnly = m_pPasskeyEntryDlg->IsReadOnly();  // Requested state
+    bool bWasReadOnly = m_core.IsReadOnly();                // Previous state
 
     // Set read-only mode if user explicitly requested it OR
-    // we could not create a lock file.
+    // if we failed to create a lock file.
     switch (index) {
       case GCP_FIRST: // if first, then m_IsReadOnly is set in Open
-        pcore->SetReadOnly(bIsReadOnly || !pcore->LockFile(curFile.c_str(), locker));
+        m_core.SetReadOnly(bWantReadOnly || !m_core.LockFile(curFile.c_str(), locker));
         break;
       case GCP_NORMAL:
-        if (!bIsReadOnly) // !first, lock if !bIsReadOnly
-          pcore->SetReadOnly(!pcore->LockFile(curFile.c_str(), locker));
+        if (!bWantReadOnly) // !first, lock if !bIsReadOnly
+          m_core.SetReadOnly(!m_core.LockFile(curFile.c_str(), locker));
         else
-          pcore->SetReadOnly(bIsReadOnly);
+          m_core.SetReadOnly(bWantReadOnly);
         break;
       case GCP_RESTORE:
       case GCP_WITHEXIT:
+        // Only lock if DB was R-O and now isn't otherwise lockcount is
+        // increased too much and the lock file won't be deleted on close
+        if (!bWantReadOnly && bWasReadOnly)
+          m_core.SetReadOnly(!m_core.LockFile(curFile.c_str(), locker));
+        break;
       case GCP_CHANGEMODE:
       default:
         // user can't change R-O status
         break;
     }
 
-    UpdateToolBarROStatus(bIsReadOnly);
-
+    // Update to current state
+    // This is not necessarily what was wanted if we couldn't get lock for R/W
+    UpdateToolBarROStatus(m_core.IsReadOnly());
+    UpdateEditViewAccelerator(m_core.IsReadOnly());
+    
     // locker won't be null IFF tried to lock and failed, in which case
     // it shows the current file locker
     if (!locker.empty()) {
@@ -1755,7 +2023,7 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
       if (i_pid > -1) {
         // If PID present then it is ":%08d" = 9 chars in length
         ASSERT((cs_user_and_host.GetLength() - i_pid) == 9);
-        cs_PID.Format(IDS_PROCESSID, cs_user_and_host.Right(8));
+        cs_PID.Format(IDS_PROCESSID, static_cast<LPCWSTR>(cs_user_and_host.Right(8)));
         cs_user_and_host = cs_user_and_host.Left(i_pid);
       } else
         cs_PID = L"";
@@ -1772,7 +2040,9 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
       gmb.AddButton(IDS_READONLY, IDS_READONLY);
       gmb.AddButton(IDS_EXIT, IDS_EXIT, TRUE, TRUE);
 #else
-      cs_msg.Format(IDS_LOCKED, curFile.c_str(), cs_user_and_host, cs_PID);
+      cs_msg.Format(IDS_LOCKED, static_cast<LPCWSTR>(curFile.c_str()),
+                    static_cast<LPCWSTR>(cs_user_and_host),
+                    static_cast<LPCWSTR>(cs_PID));
       gmb.SetMsg(cs_msg);
       gmb.AddButton(IDS_READONLY, IDS_READONLY);
       gmb.AddButton(IDS_READWRITE, IDS_READWRITE);
@@ -1781,12 +2051,12 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
       INT_PTR user_choice = gmb.DoModal();
       switch (user_choice) {
         case IDS_READONLY:
-          pcore->SetReadOnly(true);
+          m_core.SetReadOnly(true);
           UpdateToolBarROStatus(true);
           retval = PWScore::SUCCESS;
           break;
         case IDS_READWRITE:
-          pcore->SetReadOnly(false); // Caveat Emptor!
+          m_core.SetReadOnly(false); // Caveat Emptor!
           UpdateToolBarROStatus(false);
           retval = PWScore::SUCCESS;
           break;
@@ -1800,18 +2070,18 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
     } else { // locker.IsEmpty() means no lock needed or lock was successful
       if (m_pPasskeyEntryDlg->GetStatus() == TAR_NEW) {
         // Save new file
-        pcore->NewFile(m_pPasskeyEntryDlg->GetPasskey());
-        rc = pcore->WriteCurFile();
+        m_core.NewFile(m_pPasskeyEntryDlg->GetPasskey());
+        rc = m_core.WriteCurFile();
 
         if (rc == PWScore::CANT_OPEN_FILE) {
           CGeneralMsgBox gmbx;
           CString cs_temp, cs_title(MAKEINTRESOURCE(IDS_FILEWRITEERROR));
-          cs_temp.Format(IDS_CANTOPENWRITING, pcore->GetCurFile().c_str());
+          cs_temp.Format(IDS_CANTOPENWRITING, m_core.GetCurFile().c_str());
           gmbx.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONWARNING);
           retval = PWScore::USER_CANCEL;
         } else {
           // By definition - new files can't be read-only!
-          pcore->SetReadOnly(false); 
+          m_core.SetReadOnly(false); 
           retval = PWScore::SUCCESS;
         }
       } else // no need to create file
@@ -1839,7 +2109,7 @@ int DboxMain::GetAndCheckPassword(const StringX &filename,
   }
 
   // Put us back
-  app.SetSystemTrayTarget(this);
+  SetSystemTrayTarget(this);
 
   delete m_pPasskeyEntryDlg;
   m_pPasskeyEntryDlg = NULL;
@@ -1873,14 +2143,14 @@ BOOL DboxMain::OnToolTipText(UINT, NMHDR *pNotifyStruct, LRESULT *pLResult)
   TOOLTIPTEXTW *pTTTW = (TOOLTIPTEXTW *)pNotifyStruct;
   wchar_t tc_FullText[4096];  // Maxsize of a string in a resource file
   CString cs_TipText;
-  UINT nID = (UINT)pNotifyStruct->idFrom;
+  UINT_PTR nID = pNotifyStruct->idFrom;
   if (pTTTW->uFlags & TTF_IDISHWND) {
     // idFrom is actually the HWND of the tool
     nID = ((UINT)(WORD)::GetDlgCtrlID((HWND)nID));
   }
 
   if (nID != 0) { // will be zero on a separator
-    if (AfxLoadString(nID, tc_FullText, 4095) == 0)
+    if (AfxLoadString((UINT)nID, tc_FullText, 4095) == 0)
       return FALSE;
 
     // this is the command id, not the button index
@@ -1937,6 +2207,13 @@ void DboxMain::OnSysCommand(UINT nID, LPARAM lParam)
 
   switch (nSysID) {
     case SC_MINIMIZE:
+      // Save current horizontal scroll bar position
+      if (m_ctlItemList.GetItemCount() == 0) {
+        m_iListHBarPos = m_iTreeHBarPos = 0;
+      } else {
+        m_iListHBarPos = m_ctlItemList.GetScrollPos(SB_HORZ);
+        m_iTreeHBarPos = m_ctlItemTree.GetScrollPos(SB_HORZ);
+      }
       break;
     case SC_CLOSE:
       if (!PWSprefs::GetInstance()->GetPref(PWSprefs::UseSystemTray)) {
@@ -1948,7 +2225,7 @@ void DboxMain::OnSysCommand(UINT nID, LPARAM lParam)
       break;
     case SC_MAXIMIZE:
     case SC_RESTORE:
-      if (app.GetSystemTrayState() == ThisMfcApp::LOCKED &&
+      if (m_TrayLockedState == LOCKED &&
           !RestoreWindowsData(nSysID == SC_RESTORE))
         return; // password bad or cancel pressed
       break;
@@ -2005,31 +2282,21 @@ void DboxMain::OnUpdateMRU(CCmdUI* pCmdUI)
   }
 }
 
-LRESULT DboxMain::OnTrayNotification(WPARAM , LPARAM)
+LRESULT DboxMain::OnTrayNotification(WPARAM wParam, LPARAM lParam)
 {
-#if 0
-  return m_pTrayIcon.OnTrayNotification(wParam, lParam);
-#else
-  return 0L;
-#endif
+  return m_pTrayIcon->OnTrayNotification(wParam, lParam);
 }
 
 bool DboxMain::RestoreWindowsData(bool bUpdateWindows, bool bShow)
 {
   PWS_LOGIT_ARGS("bUpdateWindows=%s, bShow=%s",
-    bUpdateWindows ? _T("true") : _T("false"), 
-    bShow ? _T("true") : _T("false"));
+    bUpdateWindows ? L"true" : L"false", 
+    bShow ? L"true" : L"false");
 
   // This restores the data in the main dialog.
   // If currently locked, it checks the user knows the correct passphrase first
   // Note: bUpdateWindows = true only when called from within OnSysCommand-SC_RESTORE
   // and via the Restore menu item via the SystemTray (OnRestore)
-
-  /*
-  pws_os::Trace(L"RestoreWindowsData:bUpdateWindows = %s; bInRestoreWindowsData %s\n",
-                bUpdateWindows ? L"true" : L"false",
-                m_bInRestoreWindowsData ? L"true" : L"false");
-  */
 
   // We should not be called by a routine we call - only duplicates refreshes etc.
   if (m_bInRestoreWindowsData)
@@ -2042,32 +2309,29 @@ bool DboxMain::RestoreWindowsData(bool bUpdateWindows, bool bShow)
   if (!m_bOpen) {
     // First they may be nothing to do!
     if (bUpdateWindows) {
-      if (m_IsStartSilent) {
+      if (m_InitMode == SilentInit) {
         // Show initial dialog ONCE (if succeeds)
-        if (!m_IsStartClosed) {
-          if (OpenOnInit()) {
-            m_IsStartSilent = false;
-            RefreshViews();
-            ShowWindow(SW_RESTORE);
-            SetInitialDatabaseDisplay();
-            UpdateSystemTray(UNLOCKED);
-          }
-        } else { // m_IsStartClosed (&& m_IsStartSilent)
-          m_IsStartClosed = m_IsStartSilent = false;
+        if (OpenOnInit()) {
+          m_InitMode = NormalInit;
+          SetInitialDatabaseDisplay();
+          RefreshViews();
           ShowWindow(SW_RESTORE);
+          brc = true;
         }
-        goto exit;  // return false
-      } // m_IsStartSilent
+        goto exit;
+      } // SilentInit
       ShowWindow(SW_RESTORE);
+      brc = true;
     } // bUpdateWindows == true
     UpdateSystemTray(CLOSED);
-    goto exit;  // return false
-  }
+    goto exit;
+  } // !m_bOpen
 
+  ASSERT(m_bOpen); // all closed dbase handling should have been done above
+  
   // Case 1 - data available but is currently locked
-  // By definition - data available implies m_bInitDone
   if (!m_bDBNeedsReading &&
-      (app.GetSystemTrayState() == ThisMfcApp::LOCKED) &&
+      (m_TrayLockedState == LOCKED) &&
       (PWSprefs::GetInstance()->GetPref(PWSprefs::UseSystemTray))) {
 
     StringX passkey;
@@ -2078,11 +2342,22 @@ bool DboxMain::RestoreWindowsData(bool bUpdateWindows, bool bShow)
       goto exit;  // return false - don't even think of restoring window!
     }
 
-    app.SetSystemTrayState(ThisMfcApp::UNLOCKED);
+    SetSystemTrayState(UNLOCKED);
     if (bUpdateWindows) {
       RefreshViews();
       ShowWindow(SW_RESTORE);
     }
+
+    // Restore Find toolbar as it was before locking
+    if (m_bFindToolBarVisibleAtLock) {
+      OnShowFindToolbar();
+      m_bFindToolBarVisibleAtLock = false;
+    }
+
+    if (m_iCurrentItemFound != -1) {
+      m_FindToolBar.Find(m_iCurrentItemFound);
+    }
+
     brc = true;
     goto exit;
   }
@@ -2090,7 +2365,7 @@ bool DboxMain::RestoreWindowsData(bool bUpdateWindows, bool bShow)
   // Case 2 - data unavailable
   if (m_bInitDone && m_bDBNeedsReading) {
     StringX passkey;
-    int rc_passphrase(PWScore::USER_CANCEL), rc_readdatabase;
+    int rc_passphrase(PWScore::USER_CANCEL), rc_readdatabase(PWScore::NOT_SUCCESS);
     const bool bUseSysTray = PWSprefs::GetInstance()->
                              GetPref(PWSprefs::UseSystemTray);
 
@@ -2104,13 +2379,14 @@ bool DboxMain::RestoreWindowsData(bool bUpdateWindows, bool bShow)
       if (m_core.IsReadOnly())
         flags |= GCP_READONLY;
       if (CPWDialog::GetDialogTracker()->AnyOpenDialogs() ||
-          m_core.IsChanged())
+                m_core.HasDBChanged())
         flags |= GCP_HIDEREADONLY;
 
       rc_passphrase = GetAndCheckPassword(m_core.GetCurFile(), passkey,
                                bUseSysTray ? GCP_RESTORE : GCP_WITHEXIT,
                                flags);
     }
+
     CGeneralMsgBox gmb;
     CString cs_temp, cs_title;
 
@@ -2121,11 +2397,36 @@ bool DboxMain::RestoreWindowsData(bool bUpdateWindows, bool bShow)
         m_titlebar = PWSUtil::NormalizeTTT(L"Password Safe - " +
                                            m_core.GetCurFile()).c_str();
         break;
-      case PWScore::CANT_OPEN_FILE:
-        cs_temp.Format(IDS_CANTOPEN, m_core.GetCurFile().c_str());
+      case PWScore::CANT_OPEN_FILE: {
+        cs_temp.Format(IDS_CANTOPENSAFE, m_core.GetCurFile().c_str());
         cs_title.LoadString(IDS_FILEOPEN);
-        gmb.MessageBox(cs_temp, cs_title, MB_OK | MB_ICONWARNING);
-        // Drop thorugh to ask for a new database
+        gmb.SetTitle(cs_title);
+        gmb.SetMsg(cs_temp);
+        gmb.SetStandardIcon(MB_ICONQUESTION);
+        gmb.AddButton(IDS_SEARCH, IDS_SEARCH);
+        gmb.AddButton(IDS_RETRY, IDS_RETRY);
+        gmb.AddButton(IDS_NEW, IDS_NEW);
+        gmb.AddButton(IDS_EXIT, IDS_EXIT, TRUE, TRUE);
+        INT_PTR rc3 = gmb.DoModal();
+        switch (rc3) {
+          case IDS_SEARCH:
+            rc_readdatabase = Open();
+            break;
+          case IDS_RETRY:
+            brc = false;
+            goto exit;
+            break;
+          case IDS_NEW:
+            rc_readdatabase = New();
+            break;
+          case IDS_EXIT:
+            CleanUpAndExit(true);
+            brc = false;
+            goto exit;
+            break;
+          }
+        }
+        break; // just fail with the basic error message.
       case TAR_NEW:
         rc_readdatabase = New();
         break;
@@ -2139,7 +2440,7 @@ bool DboxMain::RestoreWindowsData(bool bUpdateWindows, bool bShow)
         rc_readdatabase = PWScore::NOT_SUCCESS;
         break;
       case PWScore::USER_EXIT:
-        m_core.UnlockFile(m_core.GetCurFile().c_str());
+        m_core.SafeUnlockCurFile();
         PostQuitMessage(0);
         return false;
       default:
@@ -2157,8 +2458,22 @@ bool DboxMain::RestoreWindowsData(bool bUpdateWindows, bool bShow)
         ShowWindow(SW_SHOW);
       if (bUpdateWindows)
         RestoreWindows();
+
+      // Restore Find toolbar as it was before locking
+      if (m_bFindToolBarVisibleAtLock) {
+        OnShowFindToolbar();
+        m_bFindToolBarVisibleAtLock = false;
+      }
+
+      if (m_iCurrentItemFound != -1) {
+        m_FindToolBar.Find(m_iCurrentItemFound);
+      }
     } else {
-      ShowWindow(bUseSysTray ? SW_HIDE : SW_MINIMIZE);
+      if (bUseSysTray) {
+        ShowWindow(SW_HIDE);
+      } else {
+        OnMinimize();
+      }
     }
     goto exit;
   }
@@ -2199,7 +2514,7 @@ void DboxMain::OnHelp()
   }
 }
 
-BOOL DboxMain::PreTranslateMessage(MSG* pMsg)
+BOOL DboxMain::PreTranslateMessage(MSG *pMsg)
 {
   // Don't do anything if in AutoType
   if (m_bInAT)
@@ -2221,7 +2536,7 @@ BOOL DboxMain::PreTranslateMessage(MSG* pMsg)
       {
         // If Find Toolbar visible, close it and do not pass the ESC along.
         if (m_FindToolBar.IsVisible()) {
-          OnHideFindToolBar();
+          OnHideFindToolbar();
           return TRUE;
         }
         // Do NOT pass the ESC along if preference EscExits is false.
@@ -2248,17 +2563,17 @@ BOOL DboxMain::PreTranslateMessage(MSG* pMsg)
     WORD wVirtualKeyCode = siKeyStateVirtualKeyCode & 0xff;
 
     if (wVirtualKeyCode != 0) {
-      WORD wModifiers(0);
+      WORD wWinModifiers(0);
       if (GetKeyState(VK_CONTROL) & 0x8000)
-        wModifiers |= MOD_CONTROL;
+        wWinModifiers |= MOD_CONTROL;
 
       if (GetKeyState(VK_MENU) & 0x8000)
-        wModifiers |= MOD_ALT;
+        wWinModifiers |= MOD_ALT;
 
       if (GetKeyState(VK_SHIFT) & 0x8000)
-        wModifiers |= MOD_SHIFT;
+        wWinModifiers |= MOD_SHIFT;
 
-      if (!ProcessEntryShortcut(wVirtualKeyCode, wModifiers))
+      if (!ProcessEntryShortcut(wVirtualKeyCode, wWinModifiers))
         return TRUE;
     }
   }
@@ -2267,10 +2582,10 @@ exit:
   return CDialog::PreTranslateMessage(pMsg);
 }
 
-BOOL DboxMain::ProcessEntryShortcut(WORD &wVirtualKeyCode, WORD &wModifiers)
+BOOL DboxMain::ProcessEntryShortcut(WORD &wVirtualKeyCode, WORD &wWinModifiers)
 {
-  static const TCHAR *tcValidKeys = 
-          _T("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+  static const wchar_t *tcValidKeys = 
+          L"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
   // Convert ASCII letters to Upper case
   if (wVirtualKeyCode >= 'a' && wVirtualKeyCode <= 'z')
@@ -2280,7 +2595,7 @@ BOOL DboxMain::ProcessEntryShortcut(WORD &wVirtualKeyCode, WORD &wModifiers)
     return 1L;
 
   // Get PWS modifiers
-  WORD wPWSModifiers = ConvertModifersWindows2PWS(wModifiers);
+  WORD wPWSModifiers = ConvertModifersWindows2PWS(wWinModifiers);
 
   // If non-zero - see if it is an entry keyboard shortcut
   if (wPWSModifiers != 0) {
@@ -2290,8 +2605,9 @@ BOOL DboxMain::ProcessEntryShortcut(WORD &wVirtualKeyCode, WORD &wModifiers)
     if (uuid != pws_os::CUUID::NullUUID()) {
       // Yes - find the entry  and deselect any already selected
       ItemListIter iter = m_core.Find(uuid);
-      DisplayInfo *pdi = (DisplayInfo *)iter->second.GetDisplayInfo();
-      ASSERT(pdi != NULL);
+
+      DisplayInfo *pdi = GetEntryGUIInfo(iter->second);
+
       if (m_ctlItemList.IsWindowVisible()) {
         // Unselect all others first
         POSITION pos = m_ctlItemList.GetFirstSelectedItemPosition();
@@ -2302,9 +2618,7 @@ BOOL DboxMain::ProcessEntryShortcut(WORD &wVirtualKeyCode, WORD &wModifiers)
         }
         
         // Get CListCtrl to do our work for us - LVN_ITEMCHANGED
-        m_ctlItemList.SetItemState(pdi->list_index,
-                                            LVIS_FOCUSED | LVIS_SELECTED,
-                                            LVIS_FOCUSED | LVIS_SELECTED);
+        m_ctlItemList.SetItemState(pdi->list_index,  LVIS_FOCUSED | LVIS_SELECTED,  LVIS_FOCUSED | LVIS_SELECTED);
         m_ctlItemList.EnsureVisible(pdi->list_index, FALSE);
       } else {
         // Get CTreeCtrl to do our work for us - TVN_SELCHANGED
@@ -2381,6 +2695,7 @@ LRESULT DboxMain::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
 
   const WORD wNCode = HIWORD(wParam);
   const WORD wID = LOWORD(wParam);
+
   /*
     wNCode = Notification Code if from a control, 1 if from an accelerator
              and 0 if from a menu.
@@ -2426,17 +2741,17 @@ LRESULT DboxMain::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
     WORD wVirtualKeyCode = siKeyStateVirtualKeyCode & 0xff;
 
     if (wVirtualKeyCode != 0) {
-      WORD wModifiers(0);
+      WORD wWinModifiers(0);
       if (GetKeyState(VK_CONTROL) & 0x8000)
-        wModifiers |= MOD_CONTROL;
+        wWinModifiers |= MOD_CONTROL;
 
       if (GetKeyState(VK_MENU) & 0x8000)
-        wModifiers |= MOD_ALT;
+        wWinModifiers |= MOD_ALT;
 
       if (GetKeyState(VK_SHIFT) & 0x8000)
-        wModifiers |= MOD_SHIFT;
+        wWinModifiers |= MOD_SHIFT;
 
-      if (!ProcessEntryShortcut(wVirtualKeyCode, wModifiers))
+      if (!ProcessEntryShortcut(wVirtualKeyCode, wWinModifiers))
         return 0;
     }
   }
@@ -2526,7 +2841,7 @@ void DboxMain::CheckExpireList(const bool bAtOpen)
   int idays = PWSprefs::GetInstance()->GetPref(PWSprefs::PreExpiryWarnDays);
   ExpiredList expiredEntries = m_core.GetExpired(idays);
 
-  if (!expiredEntries.empty() && (app.GetSystemTrayState() == LOCKED || IsIconic() == TRUE || bAtOpen))
+  if (!expiredEntries.empty() && (m_TrayLockedState == LOCKED || IsIconic() == TRUE || bAtOpen))
     m_bTellUserExpired = true;
 }
 
@@ -2553,8 +2868,16 @@ void DboxMain::TellUserAboutExpiredPasswords()
     INT_PTR rc = gmb.MessageBox(cs_text, cs_title, MB_ICONEXCLAMATION | MB_YESNO);
 
     if (rc == IDYES) {
-      CExpPWListDlg dlg(this, expiredEntries, m_core.GetCurFile().c_str());
+      CString csProtect = Fonts::GetInstance()->GetProtectedSymbol().c_str();
+      CString csAttachment = Fonts::GetInstance()->GetAttachmentSymbol().c_str();
+
+      CExpPWListDlg dlg(this, expiredEntries, m_core.GetCurFile().c_str(), csProtect, csAttachment);
       dlg.DoModal();
+
+      // If user has changed anything and has "Save database immediately after any change" - save
+      if (m_core.HasDBChanged() && PWSprefs::GetInstance()->GetPref(PWSprefs::SaveImmediately)) {
+        SaveImmediately();
+      }
     }
   }
 }
@@ -2576,15 +2899,14 @@ void DboxMain::UpdateAccessTime(const pws_os::CUUID &uuid)
       return;
     CItemData &item = iter->second;
     item.SetATime();
-    SetChanged(TimeStamp);
+    SetEntryTimestampsChanged(true);
 
     if (!IsGUIEmpty() &&
-        (m_nColumnIndexByType[CItemData::ATIME] != -1)) {
+      (m_nColumnIndexByType[CItemData::ATIME] != -1)) {
       // Need to update view if there and the display has been
       // rebuilt/restored after unlocking or minimized
       // Get index of entry
-      DisplayInfo *pdi = (DisplayInfo *)item.GetDisplayInfo();
-      ASSERT(pdi != NULL);
+      DisplayInfo *pdi = GetEntryGUIInfo(item);
       // Get value in correct format
       const CString cs_atime(item.GetATimeL().c_str());
       // Update it
@@ -2662,7 +2984,7 @@ LRESULT DboxMain::OnQueryEndSession(WPARAM , LPARAM lParam)
     }
   }
 
-  if (m_core.IsChanged() || m_core.HaveDBPrefsChanged()) {
+  if (m_core.HasDBChanged()) {
     // Windows XP or earlier - we ask user, Vista and later - we don't as we have
     // already set ShutdownBlockReasonCreate
     if (!pws_os::IsWindowsVistaOrGreater()) {
@@ -2732,82 +3054,98 @@ LRESULT DboxMain::OnEndSession(WPARAM wParam, LPARAM )
 
 void DboxMain::UpdateStatusBar()
 {
-  if (m_toolbarsSetup == TRUE) {
-    CString s;
+  if (m_toolbarsSetup != TRUE)
+    return;
 
-    // Set the width according to the text
-    UINT uiID, uiStyle;
-    int iWidth;
-    CRect rectPane;
-    // calculate text width
-    CClientDC dc(&m_statusBar);
-    CFont *pFont = m_statusBar.GetFont();
-    ASSERT(pFont);
-    dc.SelectObject(pFont);
-    const int iBMWidth = m_statusBar.GetBitmapWidth();
+  // Set the width according to the text
+  UINT uiID, uiStyle;
+  int iWidth, iFilterWidth;
+  CRect rectPane;
+  CString s;
 
-    if (m_bOpen) {
-      dc.DrawText(m_lastclipboardaction, &rectPane, DT_CALCRECT);
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_CLIPBOARDACTION, uiID, uiStyle, iWidth);
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_CLIPBOARDACTION, uiID, uiStyle, rectPane.Width());
-      m_statusBar.SetPaneText(CPWStatusBar::SB_CLIPBOARDACTION, m_lastclipboardaction);
+  // Calculate text width
+  CClientDC dc(&m_StatusBar);
+  CFont *pFont = m_StatusBar.GetFont();
+  ASSERT(pFont);
+  dc.SelectObject(pFont);
+  const int iBMWidth = m_StatusBar.GetBitmapWidth();
 
-      s = m_core.IsChanged() ? L"*" : L" ";
-      s += m_core.HaveDBPrefsChanged() ? L"°" : L" ";
-      dc.DrawText(s, &rectPane, DT_CALCRECT);
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_MODIFIED, uiID, uiStyle, iWidth);
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_MODIFIED, uiID, uiStyle, rectPane.Width());
-      m_statusBar.SetPaneText(CPWStatusBar::SB_MODIFIED, s);
+  if (m_bOpen) {
+    dc.DrawText(m_lastclipboardaction, &rectPane, DT_CALCRECT);
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_CLIPBOARDACTION, uiID, uiStyle, iWidth);
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_CLIPBOARDACTION, uiID, uiStyle, rectPane.Width());
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_CLIPBOARDACTION, m_lastclipboardaction);
 
-      s.LoadString(m_core.IsReadOnly() ? IDS_READ_ONLY : IDS_READ_WRITE);
-      dc.DrawText(s, &rectPane, DT_CALCRECT);
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_READONLY, uiID, uiStyle, iWidth);
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_READONLY, uiID, uiStyle, rectPane.Width());
-      m_statusBar.SetPaneText(CPWStatusBar::SB_READONLY, s);
+    s = m_core.HasDBChanged() ? L"*" : L" ";
+    s += m_core.HaveDBPrefsChanged() ? L"°" : L" ";
+    dc.DrawText(s, &rectPane, DT_CALCRECT);
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_MODIFIED, uiID, uiStyle, iWidth);
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_MODIFIED, uiID, uiStyle, rectPane.Width());
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_MODIFIED, s);
 
-      if (m_bFilterActive)
-        s.Format(IDS_NUMITEMSFILTER, m_bNumPassedFiltering,
-                 m_core.GetNumEntries());
-      else
-        s.Format(IDS_NUMITEMS, m_core.GetNumEntries());
+    s.LoadString(m_core.IsReadOnly() ? IDS_READ_ONLY : IDS_READ_WRITE);
+    dc.DrawText(s, &rectPane, DT_CALCRECT);
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_READONLY, uiID, uiStyle, iWidth);
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_READONLY, uiID, uiStyle, rectPane.Width());
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_READONLY, s);
 
-      dc.DrawText(s, &rectPane, DT_CALCRECT);
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_NUM_ENT, uiID, uiStyle, iWidth);
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_NUM_ENT, uiID, uiStyle, rectPane.Width());
-      m_statusBar.SetPaneText(CPWStatusBar::SB_NUM_ENT, s);
+    if (m_bFilterActive)
+      s.Format(IDS_NUMITEMSFILTER, m_bNumPassedFiltering, m_core.GetNumEntries());
+    else
+      s.Format(IDS_NUMITEMS, m_core.GetNumEntries());
 
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_FILTER, uiID, uiStyle, iWidth);
-      uiID = m_bFilterActive ? IDB_FILTER_ACTIVE : IDS_BLANK;
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_FILTER, uiID, uiStyle | SBT_OWNERDRAW, iBMWidth);
+    dc.DrawText(s, &rectPane, DT_CALCRECT);
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_NUM_ENT, uiID, uiStyle, iWidth);
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_NUM_ENT, uiID, uiStyle, rectPane.Width());
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_NUM_ENT, s);
+
+    s = L" ";
+    dc.DrawText(s, &rectPane, DT_CALCRECT);
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_FILTER, uiID, uiStyle, iWidth);
+    if (m_bFilterActive) {
+      iFilterWidth = iBMWidth;
+      uiID = IDB_FILTER_ACTIVE;
+      uiStyle |= SBT_OWNERDRAW;
     } else {
-      s.LoadString(IDSC_STATCOMPANY);
-      m_statusBar.SetPaneText(CPWStatusBar::SB_DBLCLICK, s);
-
-      dc.DrawText(L" ", &rectPane, DT_CALCRECT);
-
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_CLIPBOARDACTION, uiID, uiStyle, iWidth);
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_CLIPBOARDACTION, uiID, uiStyle, rectPane.Width());
-      m_statusBar.SetPaneText(CPWStatusBar::SB_CLIPBOARDACTION, L" ");
-
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_MODIFIED, uiID, uiStyle, iWidth);
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_MODIFIED, uiID, uiStyle, rectPane.Width());
-      m_statusBar.SetPaneText(CPWStatusBar::SB_MODIFIED, L" ");
-
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_READONLY, uiID, uiStyle, iWidth);
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_READONLY, uiID, uiStyle, rectPane.Width());
-      m_statusBar.SetPaneText(CPWStatusBar::SB_READONLY, L" ");
-
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_NUM_ENT, uiID, uiStyle, iWidth);
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_NUM_ENT, uiID, uiStyle, rectPane.Width());
-      m_statusBar.SetPaneText(CPWStatusBar::SB_NUM_ENT, L" ");
-
-      m_statusBar.GetPaneInfo(CPWStatusBar::SB_FILTER, uiID, uiStyle, iWidth);
-      m_statusBar.SetPaneInfo(CPWStatusBar::SB_FILTER, IDS_BLANK, uiStyle | SBT_OWNERDRAW, iBMWidth);
+      iFilterWidth = rectPane.Width();
+      uiID = IDS_BLANK;
+      uiStyle &= ~SBT_OWNERDRAW;
     }
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_FILTER, uiID, uiStyle, iFilterWidth);
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_FILTER, s);
+
+    // Fix issue displaying image in Windows 7
+    CRect rect;
+    m_StatusBar.GetItemRect(CPWStatusBar::SB_FILTER, &rect);
+    m_StatusBar.RedrawWindow(&rect);
+  } else {
+    s.LoadString(IDSC_STATCOMPANY);
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_DBLCLICK, s);
+
+    dc.DrawText(L" ", &rectPane, DT_CALCRECT);
+
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_CLIPBOARDACTION, uiID, uiStyle, iWidth);
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_CLIPBOARDACTION, uiID, uiStyle, rectPane.Width());
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_CLIPBOARDACTION, L" ");
+
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_MODIFIED, uiID, uiStyle, iWidth);
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_MODIFIED, uiID, uiStyle, rectPane.Width());
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_MODIFIED, L" ");
+
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_READONLY, uiID, uiStyle, iWidth);
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_READONLY, uiID, uiStyle, rectPane.Width());
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_READONLY, L" ");
+
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_NUM_ENT, uiID, uiStyle, iWidth);
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_NUM_ENT, uiID, uiStyle, rectPane.Width());
+    m_StatusBar.SetPaneText(CPWStatusBar::SB_NUM_ENT, L" ");
+
+    m_StatusBar.GetPaneInfo(CPWStatusBar::SB_FILTER, uiID, uiStyle, iWidth);
+    m_StatusBar.SetPaneInfo(CPWStatusBar::SB_FILTER, IDS_BLANK, uiStyle | SBT_OWNERDRAW, iBMWidth);
   }
 
-  m_statusBar.Invalidate();
-  m_statusBar.UpdateWindow();
+  m_StatusBar.Invalidate();
+  m_StatusBar.UpdateWindow();
 
   /*
   This doesn't exactly belong here, but it makes sure that the
@@ -2834,7 +3172,7 @@ void DboxMain::SetDCAText(CItemData *pci)
   if (m_IsListView && m_ctlItemList.GetSelectedCount() != 1)
     si_dca = -1;
 
-  m_statusBar.SetPaneText(CPWStatusBar::SB_DBLCLICK, PWSprefs::GetDCAdescription(si_dca).c_str());
+  m_StatusBar.SetPaneText(CPWStatusBar::SB_DBLCLICK, PWSprefs::GetDCAdescription(si_dca).c_str());
 }
 
 struct NoDuplicates{
@@ -2847,48 +3185,87 @@ private:
   pws_os::CUUID m_uuid;
 };
 
+// Functor for MakeOrderedItemList
+struct TreeCollector : public CPWTreeCtrlX::TreeItemFunctor {
+  TreeCollector(CPWTreeCtrl &it) : itemTree(it) {}
+  void operator() (HTREEITEM hi) {
+    CItemData *pci = (CItemData *)itemTree.GetItemData(hi);
+    if (pci != nullptr)
+      pcis.push_back(pci);
+  };
+  CPWTreeCtrlX &itemTree;
+  std::vector<CItemData *> pcis;
+};
+
 // Returns a list of entries as they appear in tree in DFS order
-void DboxMain::MakeOrderedItemList(OrderedItemList &OIL, HTREEITEM hItem)
+std::vector<pws_os::CUUID> DboxMain::MakeOrderedItemList(OrderedItemList &OIL, HTREEITEM hItem)
 {
-  // Walk the Tree - either complete tree or only this group!
+  TreeCollector tc(m_ctlItemTree);
+  m_ctlItemTree.Iterate(hItem, tc);
+
+  std::vector<pws_os::CUUID> vuuidAddedBases;
+
+  // Walk the Tree - either complete tree (may not be the complete DB if a filter is active)
+  // or only the group being exported
+  // The if() on hItem is due to the evolution of this function. Should probably be eliminated and code
+  // be the same for all cases, e.g., what if someone's exporting a filtered group?
+
   if (hItem == NULL) {
-    // The whole tree
-    while (NULL != (hItem = const_cast<DboxMain *>(this)->m_ctlItemTree.GetNextTreeItem(hItem))) {
-      if (!m_ctlItemTree.ItemHasChildren(hItem)) {
-        CItemData *pci = (CItemData *)m_ctlItemTree.GetItemData(hItem);
-        if (pci != NULL) {
-          OIL.push_back(*pci);
-        }
-      }
-    }
-  }
-  else {
-    // Just this group - used for Export Group
-    const HTREEITEM hNextSibling = m_ctlItemTree.GetNextSiblingItem(hItem);
+    // The whole tree (a filter may be active)
+    for (auto pci = tc.pcis.begin(); pci != tc.pcis.end(); pci++) {
+      OIL.push_back(**pci);
 
-    // Get all of the children
-    if (m_ctlItemTree.ItemHasChildren(hItem)) {
-      HTREEITEM hNextItem = m_ctlItemTree.GetNextTreeItem(hItem);
+      // This is for exporting Filtered Entries ONLY
+      // Walk the reduced Tree but include base entries even if not in the filtered results
+      if (m_bFilterActive && (*pci)->IsDependent()) {
+        CItemData *pcibase = GetBaseEntry(*pci);
 
-      while (hNextItem != NULL && hNextItem != hNextSibling) {
-        CItemData *pci = (CItemData *)m_ctlItemTree.GetItemData(hNextItem);
-        // Include base entires of any aliases or shortcuts
-        // and ensure no duplicates (an entry could have been previously added
-        // if it was the base of a previously added alias/shortcut
-        if (pci != NULL) {
-          if (std::find_if(OIL.begin(), OIL.end(), NoDuplicates(pci->GetUUID())) == OIL.end())
-            OIL.push_back(*pci);
+        // Only add the base entry once
+        if (std::find_if(OIL.begin(), OIL.end(), NoDuplicates(pcibase->GetUUID())) == OIL.end()) {
+          OIL.push_back(*pcibase);
 
-          if (pci->IsDependent()) {
-            pci = GetBaseEntry(pci);
-            if (std::find_if(OIL.begin(), OIL.end(), NoDuplicates(pci->GetUUID())) == OIL.end())
-              OIL.push_back(*pci);
+          DisplayInfo *pdi = GetEntryGUIInfo(*pcibase);
+          if (pdi == NULL || pdi->list_index == -1) {
+            // The base is not in the filtered results - add to list
+            vuuidAddedBases.push_back(pcibase->GetUUID());
           }
         }
-        hNextItem = m_ctlItemTree.GetNextTreeItem(hNextItem);
       }
-    }
-  }
+    } // iterate over collected pcis
+  } else { // hItem not null, just this group - used for Export Group
+    const StringX sxThisGroup = m_ctlItemTree.GetGroup(hItem);
+    const StringX sxThisGroupDot = sxThisGroup + L".";
+
+    for (auto pci = tc.pcis.begin(); pci != tc.pcis.end(); pci++) {
+      if (std::find_if(OIL.begin(), OIL.end(), NoDuplicates((*pci)->GetUUID())) == OIL.end())
+        OIL.push_back(**pci);
+
+      if ((*pci)->IsDependent()) {
+        // Include base entries of any aliases or shortcuts, but only once
+        // (an entry could have been previously added
+        // if it was the base of a previously added alias/shortcut)
+        CItemData *pcibase = GetBaseEntry(*pci);
+
+        if (std::find_if(OIL.begin(), OIL.end(), NoDuplicates(pcibase->GetUUID())) == OIL.end()) {
+          OIL.push_back(*pcibase);
+
+          // List this included base for the report if not in the group being exported
+          StringX sxBaseGroup = pcibase->GetGroup();
+          bool bNotInThisGroup = CompareNoCase(sxThisGroup, sxBaseGroup) != 0;
+          bool bNotInASubgroupOfThisGroup = 
+            sxThisGroupDot.length() < sxBaseGroup.length() ?
+                                      CompareNoCase(sxThisGroupDot, sxBaseGroup.substr(sxThisGroupDot.length())) != 0 : true;
+             
+          if (bNotInThisGroup && bNotInASubgroupOfThisGroup) {
+            // The base is not in the filtered results - add to list
+            vuuidAddedBases.push_back(pcibase->GetUUID());
+          }
+        }
+      } // dependent handling
+    } // iterate over collected pcis
+  } // hItem not null
+
+  return vuuidAddedBases;
 }
 
 void DboxMain::UpdateMenuAndToolBar(const bool bOpen)
@@ -2896,19 +3273,18 @@ void DboxMain::UpdateMenuAndToolBar(const bool bOpen)
   // Initial setup of menu items and toolbar buttons
   // First set new open/close status
   m_bOpen = bOpen;
-  UpdateSystemMenu();
 
   // For open/close
   const UINT imenuflags = bOpen ? MF_ENABLED : MF_DISABLED | MF_GRAYED;
 
   // Change Main Menus if a database is Open or not
-  CWnd* pMain = AfxGetMainWnd();
-  CMenu* xmainmenu = pMain->GetMenu();
+  CWnd *pMain = AfxGetMainWnd();
+  CMenu *xmainmenu = pMain->GetMenu();
 
   // Look for "File" menu - no longer language dependent
   int pos = app.FindMenuItem(xmainmenu, ID_FILEMENU);
 
-  CMenu* xfilesubmenu = xmainmenu->GetSubMenu(pos);
+  CMenu *xfilesubmenu = xmainmenu->GetSubMenu(pos);
   if (xfilesubmenu != NULL) {
     // Disable/enable Export and Import menu items
     xfilesubmenu->EnableMenuItem(ID_EXPORTMENU, imenuflags);
@@ -2940,7 +3316,7 @@ void DboxMain::UpdateMenuAndToolBar(const bool bOpen)
     }
 
     if (m_FindToolBar.IsVisible() && !bOpen) {
-      OnHideFindToolBar();
+      OnHideFindToolbar();
     }
   }
 }
@@ -2963,12 +3339,11 @@ void DboxMain::OnUpdateMenuToolbar(CCmdUI *pCmdUI)
     case ID_MENUITEM_TRAYUNLOCK:
     case ID_MENUITEM_TRAYLOCK:
     {
-      const int i_state = app.GetSystemTrayState();
-      switch (i_state) {
-        case ThisMfcApp::UNLOCKED:
-        case ThisMfcApp::LOCKED:
+      switch (m_TrayLockedState) {
+        case UNLOCKED:
+        case LOCKED:
           break;
-        case ThisMfcApp::CLOSED:
+        case CLOSED:
         {
           const CString csClosed(MAKEINTRESOURCE(IDS_NOSAFE));
           pCmdUI->SetText(csClosed);
@@ -2984,7 +3359,7 @@ void DboxMain::OnUpdateMenuToolbar(CCmdUI *pCmdUI)
           ASSERT(0);
           break;
       }
-      if (i_state != ThisMfcApp::CLOSED) {
+      if (m_TrayLockedState != CLOSED) {
         // If dialog visible - obviously unlocked and no need to have option to lock
         iEnable = this->IsWindowVisible() == FALSE ? TRUE : FALSE;
       }
@@ -2997,7 +3372,7 @@ void DboxMain::OnUpdateMenuToolbar(CCmdUI *pCmdUI)
         // CCmdUI::Enable is a no-op for this case, so we
         //   must do what it would have done.
         pCmdUI->m_pMenu->EnableMenuItem(pCmdUI->m_nIndex, MF_BYPOSITION |
-          (app.GetSystemTrayState() == ThisMfcApp::UNLOCKED ? MF_ENABLED : MF_GRAYED));
+          (m_TrayLockedState == UNLOCKED ? MF_ENABLED : MF_GRAYED));
         return;
       }
       // otherwise enable
@@ -3058,25 +3433,27 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
   // The previous lookup table is the only mechanism to ENABLE an item
 
   const bool bTreeView = m_ctlItemTree.IsWindowVisible() == TRUE;
-  bool bGroupSelected = false, bFileIsReadOnly(false);
-  const CItemData *pci(NULL);
+  bool bGroupSelected(false), bFileIsReadOnly(false);
+  const CItemData *pci(NULL), *pbci(NULL);
   CItemData::EntryType etype(CItemData::ET_INVALID);
 
-  if (bTreeView) {
-    HTREEITEM hi = m_ctlItemTree.GetSelectedItem();
-    bGroupSelected = (hi != NULL && !m_ctlItemTree.IsLeaf(hi));
-    if (hi != NULL)
-      pci = (CItemData *)m_ctlItemTree.GetItemData(hi);
-  } else {
-    POSITION pos = m_ctlItemList.GetFirstSelectedItemPosition();
-    if (pos != NULL)
-      pci = (CItemData *)m_ctlItemList.GetItemData((int)pos - 1);
+  if (m_bOpen) {
+    if (bTreeView) {
+      HTREEITEM hi = m_ctlItemTree.GetSelectedItem();
+      bGroupSelected = (hi != NULL && !m_ctlItemTree.IsLeaf(hi));
+      if (hi != NULL)
+        pci = (CItemData *)m_ctlItemTree.GetItemData(hi);
+    } else {
+      POSITION pos = m_ctlItemList.GetFirstSelectedItemPosition();
+      if (pos != NULL)
+        pci = (CItemData *)m_ctlItemList.GetItemData((int)(INT_PTR)pos - 1);
+    }
   }
 
   if (pci != NULL) {
     etype = pci->GetEntryType(); // Save entry type before changing pci
-    if (pci->IsShortcut()) {
-      pci = GetBaseEntry(pci);
+    if (pci->IsDependent()) {
+      pbci = GetBaseEntry(pci);
     }
   }
 
@@ -3086,7 +3463,8 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
     case ID_MENUITEM_DUPLICATEENTRY:
     case ID_MENUITEM_COPYPASSWORD:
     case ID_MENUITEM_AUTOTYPE:
-    case ID_MENUITEM_EDIT:
+    case ID_MENUITEM_EDITENTRY:
+    case ID_MENUITEM_VIEWENTRY:
     case ID_MENUITEM_PASSWORDSUBSET:
       if (bGroupSelected)
         iEnable = FALSE;
@@ -3104,17 +3482,12 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
         // Not allowed if a Group is selected
         iEnable = FALSE;
       } else {
-        const CItemData *pcix = getSelectedItem();
-        if (pcix == NULL) {
+        if (pci == NULL) {
           iEnable = FALSE;
         } else {
-          if (pcix->IsShortcut()) {
-            pcix = GetBaseEntry(pcix);
-          }
-
-          if (pcix->IsEmailEmpty() &&
-              (pcix->IsURLEmpty() ||
-              (!pcix->IsURLEmpty() && !pcix->IsURLEmail()))) {
+          if (pci->IsFieldValueEmpty(CItemData::EMAIL, pbci) &&
+              (pci->IsFieldValueEmpty(CItemData::URL, pbci) ||
+              (!pci->IsFieldValueEmpty(CItemData::URL, pbci) && !pci->IsURLEmail(pbci)))) {
             iEnable = FALSE;
           }
         }
@@ -3127,39 +3500,41 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
     case ID_MENUITEM_COPYNOTESFLD:
     case ID_MENUITEM_COPYURL:
     case ID_MENUITEM_COPYEMAIL:
+    case ID_MENUITEM_VIEWATTACHMENT:
       if (bGroupSelected) {
         // Not allowed if a Group is selected
         iEnable = FALSE;
       } else {
-        const CItemData *pcix = getSelectedItem();
-        if (pcix == NULL) {
+        if (pci == NULL) {
           iEnable = FALSE;
         } else {
-          if (pcix->IsShortcut()) {
-            pcix = GetBaseEntry(pcix);
-          }
-
           switch (nID) {
             case ID_MENUITEM_COPYUSERNAME:
-              if (pcix->IsUserEmpty()) {
+              if (pci->IsFieldValueEmpty(CItemData::USER, pbci)) {
                 iEnable = FALSE;
               }
               break;
             case ID_MENUITEM_COPYNOTESFLD:
-              if (pcix->IsNotesEmpty()) {
+              if (pci->IsFieldValueEmpty(CItemData::NOTES, pbci)) {
                 iEnable = FALSE;
               }
               break;
             case ID_MENUITEM_COPYEMAIL:
-              if (pcix->IsEmailEmpty() ||
-                  (!pcix->IsURLEmpty() && pcix->IsURLEmail())) {
+              if (pci->IsFieldValueEmpty(CItemData::EMAIL, pbci) ||
+                  (!pci->IsFieldValueEmpty(CItemData::URL, pbci) &&
+                    pci->IsURLEmail(pbci))) {
                 iEnable = FALSE;
               }
               break;
             case ID_MENUITEM_BROWSEURL:
             case ID_MENUITEM_BROWSEURLPLUS:
             case ID_MENUITEM_COPYURL:
-              if (pcix->IsURLEmpty()) {
+              if (pci->IsFieldValueEmpty(CItemData::URL, pbci)) {
+                iEnable = FALSE;
+              }
+              break;
+            case ID_MENUITEM_VIEWATTACHMENT:
+              if (!pci->HasAttRef()) {
                 iEnable = FALSE;
               }
               break;
@@ -3169,7 +3544,7 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
       break;
     case ID_MENUITEM_RUNCOMMAND:
     case ID_MENUITEM_COPYRUNCOMMAND:
-      if (pci == NULL || pci->IsRunCommandEmpty()) {
+      if (pci == NULL || pci->IsFieldValueEmpty(CItemData::RUNCMD, pbci)) {
         iEnable = FALSE;
       }
       break;
@@ -3179,13 +3554,12 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
         // Not allowed if a Group is selected
         iEnable = FALSE;
       } else {
-        CItemData *pcix = getSelectedItem();
-        if (pcix == NULL) {
+        if (pci == NULL) {
           iEnable = FALSE;
         } else {
           // Can only define a shortcut on a normal entry or
           // one that is already a shortcut base
-          if (!pcix->IsNormal() && !pcix->IsShortcutBase()) {
+          if (!pci->IsNormal() && !pci->IsShortcutBase()) {
             iEnable = FALSE;
           }
         }
@@ -3213,7 +3587,7 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
       break;
     // If not changed, no need to allow Save!
     case ID_MENUITEM_SAVE:
-      if ((!m_core.IsChanged() && !m_core.HaveDBPrefsChanged()) ||
+      if ((!m_core.HasDBChanged()) ||
             m_core.GetReadFileVersion() < PWSfile::VCURRENT)
         iEnable = FALSE;
       break;
@@ -3242,7 +3616,7 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
     case ID_MENUITEM_OLD_TOOLBAR:
     case ID_MENUITEM_NEW_TOOLBAR:
     {
-      CDC* pDC = this->GetDC();
+      CDC *pDC = this->GetDC();
       int NumBits = (pDC ? pDC->GetDeviceCaps(12 /*BITSPIXEL*/) : 32);
       if (NumBits < 16 && m_toolbarMode == ID_MENUITEM_OLD_TOOLBAR) {
         // Less that 16 color bits available, no choice, disable menu items
@@ -3274,17 +3648,24 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
                            m_FindToolBar.IsFindCaseSet());
       return -1;
     case ID_MENUITEM_SHOWHIDE_UNSAVED:
-      // Filter sub-menu mutally exclusive with use of inernal filters for
-      // display of unsaved entries or expired entries
-      if (!m_core.IsChanged() || 
+      // Filter sub-menu mutually exclusive with use of internal filters for
+      // display of unsaved or expired entries
+      if ((!m_core.HasDBChanged() && !m_core.HaveEmptyGroupsChanged()) ||
           (m_bFilterActive && !m_bUnsavedDisplayed))
         iEnable = FALSE;
       break;
     case ID_MENUITEM_SHOW_ALL_EXPIRY:
-      // Filter sub-menu mutally exclusive with use of inernal filters for
-      // display of unsaved entries or expired entries
+      // Filter sub-menu mutually exclusive with use of internal filters for
+      // display of unsaved or expired entries
       if (m_core.GetExpirySize() == 0 ||
           (m_bFilterActive && !m_bExpireDisplayed))
+        iEnable = FALSE;
+      break;
+    case ID_MENUITEM_SHOW_FOUNDENTRIES:
+      // Filter sub-menu mutually exclusive with use of internal filters for
+      // display of unsaved or expired entries
+      if (m_FilterManager.GetFindFilterSize() == 0 ||
+          (m_bFilterActive && !m_bFindFilterDisplayed))
         iEnable = FALSE;
       break;
     case ID_MENUITEM_CLEAR_MRU:
@@ -3299,6 +3680,10 @@ int DboxMain::OnUpdateMenuToolbar(const UINT nID)
     case ID_MENUITEM_EDITFILTER:
     case ID_MENUITEM_MANAGEFILTERS:
       if (m_bUnsavedDisplayed)
+        iEnable = FALSE;
+      break;
+    case ID_MENUITEM_EXPORTFILTERED2DB:
+      if (!m_bFilterActive)
         iEnable = FALSE;
       break;
     case ID_MENUITEM_CHANGEMODE:
@@ -3392,49 +3777,10 @@ void DboxMain::ClipRectToMonitor(HWND hwnd, RECT *prc, BOOL fWork)
     rc = (fWork) ? mi.rcWork : mi.rcMonitor;
   }
 
-  prc->left = max(rc.left, min(rc.right-w, prc->left));
-  prc->top = max(rc.top, min(rc.bottom-h, prc->top));
+  prc->left = std::max(rc.left, std::min(rc.right-w, prc->left));
+  prc->top = std::max(rc.top, std::min(rc.bottom-h, prc->top));
   prc->right = prc->left + w;
   prc->bottom = prc->top + h;
-}
-
-void DboxMain::UpdateSystemMenu()
-{
-  /**
-   * Currently we leave the system menu untouched, even if the
-   * last entry ("X Close Alt+F4") is a bit ambiguous:
-   * With UseSystemTray, we minimize to the system tray
-   * Without it, we exit the application.
-   *
-   * Leaving this as a 'placeholder' if/when we change out minds.
-   */
-#if 0
-  CMenu *pSysMenu = GetSystemMenu(FALSE);
-  if (pSysMenu == NULL) // docs don't say when this can occur,
-    return;             // but MS's example check this as well!
-  BYTE flag = PWSprefs::GetInstance()->GetPref(PWSprefs::UseSystemTray) ? 1 : 0;
-  flag |= m_bOpen ? 2 : 0;
-
-  CString cs_text;
-  switch (flag) {
-    case 0: // Closed + No System Tray : Exit
-      cs_text.LoadString(IDS_EXIT);
-      break;
-    case 1: // Closed +    System Tray : Minimize to System Tray
-      cs_text.LoadString(IDS_MIN2ST);
-      break;
-    case 2: // Open   + No System Tray : Close DB + Exit
-      cs_text.LoadString(IDS_CLOSE_EXIT);
-      break;
-    case 3: // Open   +    System Tray : Minimize to System Tray & maybe lock
-      if (PWSprefs::GetInstance()->GetPref(PWSprefs::DatabaseClear))
-        cs_text.LoadString(IDS_MIN2STLOCK);
-      else
-        cs_text.LoadString(IDS_MIN2ST);
-      break;
-   }
-   pSysMenu->ModifyMenu(SC_CLOSE, MF_BYCOMMAND, SC_CLOSE, cs_text);
-#endif
 }
 
 bool DboxMain::CheckPreTranslateDelete(MSG* pMsg)

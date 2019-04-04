@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -59,6 +59,15 @@ const size_t CPasswordCharPool::easyvision_hexdigit_len = LENGTH(easyvision_hexd
 
 // See the values of "charT sym" in the static const structure "leets" below
 const charT CPasswordCharPool::pronounceable_symbol_chars[] = _T("@&(#!|$+");
+
+//-----------------------------------------------------------------------------
+CPasswordCharPool::typeFreq_s::typeFreq_s(const CPasswordCharPool *parent, CharType ct, uint nc)
+  : numchars(nc)
+{
+  vchars.resize(parent->m_pwlen);
+  std::generate(vchars.begin(), vchars.end(),
+                [this, parent, ct] () {return parent->GetRandomChar(ct);});
+}
 
 //-----------------------------------------------------------------------------
 
@@ -145,7 +154,7 @@ CPasswordCharPool::CPasswordCharPool(const PWPolicy &policy)
 
 CPasswordCharPool::~CPasswordCharPool()
 {
-  if (m_char_arrays[SYMBOL] != NULL &&
+  if (m_char_arrays[SYMBOL] != nullptr &&
       m_char_arrays[SYMBOL] != std_symbol_chars &&
       m_char_arrays[SYMBOL] != easyvision_symbol_chars)
     free(const_cast<charT*>(m_char_arrays[SYMBOL]));
@@ -205,14 +214,9 @@ charT CPasswordCharPool::GetRandomChar(CPasswordCharPool::CharType t, unsigned i
 charT CPasswordCharPool::GetRandomChar(CPasswordCharPool::CharType t) const
 {
   PWSrand *ri = PWSrand::GetInstance();
-  uint r = ri->RangeRand(static_cast<uint>(m_lengths[t]));
+  uint r = ri->RangeRand(m_lengths[t]);
   return GetRandomChar(t, r);
 }
-
-struct RandomWrapper {
-  unsigned int operator()(unsigned int i)
-  {return PWSrand::GetInstance()->RangeRand(i);}
-};
 
 StringX CPasswordCharPool::MakePassword() const
 {
@@ -226,7 +230,6 @@ StringX CPasswordCharPool::MakePassword() const
   ASSERT(m_pwlen > 0);
   ASSERT(m_uselowercase || m_useuppercase || m_usedigits ||
          m_usesymbols   || m_usehexdigits || m_pronounceable);
-
 
   // pronounceable and hex passwords are handled separately:
   if (m_pronounceable)
@@ -256,38 +259,50 @@ StringX CPasswordCharPool::MakePassword() const
          return a.numchars > b.numchars;
        });
 
-  StringX temp;
+  StringX retval, cat;
   // First meet the 'at least' constraints
   for (auto iter = typeFreqs.begin(); iter != typeFreqs.end(); iter++)
     for (uint j = 0; j < iter->numchars; j++) {
       if (!iter->vchars.empty()) {
-        temp.push_back(iter->vchars.back());
+        retval.push_back(iter->vchars.back());
         iter->vchars.pop_back();
-        if (temp.length() == m_pwlen)
+        if (retval.length() == m_pwlen)
           goto do_shuffle; // break out of two loops, goto needed
       }
     }
 
-
   // Now fill in the rest
-  while (temp.length() != m_pwlen) {
-    uint i = PWSrand::GetInstance()->RangeRand(typeFreqs.size());
-    if (!typeFreqs[i].vchars.empty()) {
-      temp.push_back(typeFreqs[i].vchars.back());
-      typeFreqs[i].vchars.pop_back();
-      if (temp.length() == m_pwlen)
-        goto do_shuffle; // break out of two loops, goto needed
-    }
+  for (int i = 0; i < NUMTYPES; i++)
+    if (m_lengths[i] > 0)
+      cat += m_char_arrays[i];
+
+  // If the requested password length is > set of chars we collected
+  // in cat, just grow cat until it's big enough (BR1450)
+  if ((m_pwlen - retval.length()) > cat.length()) {
+    const auto cat0 = cat;
+    while ((m_pwlen - retval.length()) > cat.length())
+      cat += cat0;
   }
+
+  random_shuffle(cat.begin(), cat.end(),
+                 [](size_t i)
+                 {
+                   return PWSrand::GetInstance()->RangeRand(i);
+                 });
+
+  retval += cat.substr(0, m_pwlen - retval.length());
 
  do_shuffle:
   // If 'at least' values were non-zero, we have some unwanted order,
-  // se we mix things up a bit:
-  RandomWrapper rnw;
-  random_shuffle(temp.begin(), temp.end(), rnw);
+  // so we mix things up a bit:
+  random_shuffle(retval.begin(), retval.end(),
+                 [](size_t i)
+                 {
+                   return PWSrand::GetInstance()->RangeRand(i);
+                 });
 
-  ASSERT(temp.length() == size_t(m_pwlen));
-  return temp;
+  ASSERT(retval.length() == size_t(m_pwlen));
+  return retval;
 }
 
 static const struct {
@@ -367,7 +382,7 @@ StringX CPasswordCharPool::MakePronounceable() const
      generates "mmitify" even though no word in my dictionary
      begins with mmi. So what.) */
   sumfreq = sigma;  // sigma calculated by loadtris
-  ranno = static_cast<long>(pwsrnd->RangeRand(sumfreq+1)); // Weight by sum of frequencies
+  ranno = static_cast<long>(pwsrnd->RangeRand((size_t)(sumfreq + 1))); // Weight by sum of frequencies
   sum = 0;
   for (c1 = 0; c1 < 26; c1++) {
     for (c2 = 0; c2 < 26; c2++) {
@@ -398,7 +413,7 @@ StringX CPasswordCharPool::MakePronounceable() const
       break;  // Break while nchar loop & print what we have.
     }
     /* Choose a continuation. */
-    ranno = static_cast<long>(pwsrnd->RangeRand(sumfreq+1)); // Weight by sum of frequencies
+    ranno = static_cast<long>(pwsrnd->RangeRand((size_t)(sumfreq + 1))); // Weight by sum of frequencies
     sum = 0;
     for (c3 = 0; c3 < 26; c3++) {
       sum += tris[int(c1)][int(c2)][int(c3)];
@@ -425,8 +440,12 @@ StringX CPasswordCharPool::MakePronounceable() const
       // choose how many to replace (not too many, but at least one)
       unsigned int rn = pwsrnd->RangeRand(sc.size() - 1)/2 + 1;
       // replace some of them
-      RandomWrapper rnw;
-      random_shuffle(sc.begin(), sc.end(), rnw);
+      random_shuffle(sc.begin(), sc.end(),
+                     [](size_t i)
+                     {
+                       return PWSrand::GetInstance()->RangeRand(i);
+                     });
+
       for (unsigned int i = 0; i < rn; i++)
         leet_replace(password, sc[i], m_usedigits, m_usesymbols);
     }
@@ -453,7 +472,7 @@ StringX CPasswordCharPool::MakeHex() const
 {
   StringX password = _T("");
   for (uint i = 0; i < m_pwlen; i++) {
-      unsigned int rand = PWSrand::GetInstance()->RangeRand(static_cast<unsigned int>(m_sumlengths));
+      unsigned int rand = PWSrand::GetInstance()->RangeRand(m_sumlengths);
       charT ch = GetRandomChar(HEXDIGIT, rand);
       password += ch;
   }

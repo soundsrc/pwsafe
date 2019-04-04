@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -17,22 +17,37 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 #include "Fonts.h"
+
 #include "core/PwsPlatform.h"
+#include "os/env.h"
+
+#include <usp10.h>    // for support of Unicode character (Uniscribe)
+
+#include <vector>
 
 Fonts *Fonts::self = NULL;
 
-/*
-  Only the following set:
-    lf.lfHeight = -16;
-    lf.lfWeight = FW_NORMAL;
-    lf.lfPitchAndFamily = FF_MODERN | FIXED_PITCH;
-    lf.lfFaceName = L"Courier"; // max size = LF_FACESIZE (32)
-*/
+// 12pt Consolas Regular
 static LOGFONT dfltPasswordLogfont = {
   -16, 0, 0, 0, FW_NORMAL, 0, 0, 0, 0, 0, 0, 0, FF_MODERN | FIXED_PITCH,
-  L'C', L'o', L'u', L'r', L'i', L'e', L'r', L'\0'};
+  L'C', L'o', L'n', L's', L'o', L'l', L'a', L's', L'\0'};
 
-// Bug in MS TreeCtrl and CreateDragImage.  During Drag, it doesn't show
+// 10pt Segoe UI Regular
+static LOGFONT dfltTreeListFont = {
+  -13, 0, 0, 0, FW_NORMAL, 0, 0, 0, 0, 0, 0, 0, FF_MODERN | FF_SWISS,
+  L'S', L'e', L'g', L'o', L'e', L' ', L'U', L'I', L'\0'};
+
+// 10pt Segoe UI Regular
+static LOGFONT dfltAddEditLogfont = {
+  -13, 0, 0, 0, FW_NORMAL, 0, 0, 0, 0, 0, 0, 0, FF_MODERN | FF_SWISS,
+  L'S', L'e', L'g', L'o', L'e', L' ', L'U', L'I', L'\0'};
+
+// 10pt Segoe UI Regular
+static LOGFONT dfltNotesLogfont = {
+  -13, 0, 0, 0, FW_NORMAL, 0, 0, 0, 0, 0, 0, 0, FF_MODERN | FF_SWISS,
+  L'S', L'e', L'g', L'o', L'e', L' ', L'U', L'I', L'\0'};
+
+// Bug in MS TreeCtrl and CreateDragImage. During Drag, it doesn't show
 // the entry's text as well as the drag image if the font is not MS Sans Serif !!!!
 static LOGFONT DragFixLogfont = {
   -16, 0, 0, 0, FW_NORMAL, 0, 0, 0, 0, 0, 0, 0, DEFAULT_PITCH | FF_SWISS,
@@ -48,15 +63,25 @@ Fonts *Fonts::GetInstance()
 
 void Fonts::DeleteInstance()
 {
-  if (m_pCurrentFont != NULL) {
-    m_pCurrentFont->DeleteObject();
-    delete m_pCurrentFont;
-    m_pCurrentFont = NULL;
+  if (m_pTreeListFont != NULL) {
+    m_pTreeListFont->DeleteObject();
+    delete m_pTreeListFont;
+    m_pTreeListFont = NULL;
   }
-  if (m_pModifiedFont != NULL) {
-    m_pModifiedFont->DeleteObject();
-    delete m_pModifiedFont;
-    m_pModifiedFont = NULL;
+  if (m_pAddEditFont != NULL) {
+    m_pAddEditFont->DeleteObject();
+    delete m_pAddEditFont;
+    m_pAddEditFont = NULL;
+  }
+  if (m_pItalicTreeListFont != NULL) {
+    m_pItalicTreeListFont->DeleteObject();
+    delete m_pItalicTreeListFont;
+    m_pItalicTreeListFont = NULL;
+  }
+  if (m_pItalicAddEditFont != NULL) {
+    m_pItalicAddEditFont->DeleteObject();
+    delete m_pItalicAddEditFont;
+    m_pItalicAddEditFont = NULL;
   }
   if (m_pDragFixFont != NULL) {
     m_pDragFixFont->DeleteObject();
@@ -77,36 +102,129 @@ void Fonts::DeleteInstance()
   self = NULL;
 }
 
-Fonts::Fonts() : MODIFIED_COLOR(RGB(0, 0, 128))
+std::wstring Utf32ToUtf16(uint32_t codepoint)
 {
-  m_pCurrentFont = new CFont;
-  m_pModifiedFont = new CFont;
+  wchar_t wc[3];
+  if (codepoint < 0x10000) {
+    // Length 1
+    wc[0] = static_cast<wchar_t>(codepoint);
+    wc[1] = wc[2] = 0;
+  } else {
+    if (codepoint <= 0x10FFFF) {
+      codepoint -= 0x10000;
+      // Length 2
+      wc[0] = (unsigned short)(codepoint >> 10) + (unsigned short)0xD800;
+      wc[1] = (unsigned short)(codepoint & 0x3FF) + (unsigned short)0xDC00;
+      wc[2] = 0;
+    } else {
+      // Length 1
+      wc[0] = 0xFFFD;
+      wc[1] = wc[2] = 0;
+    }
+  }
+  std::wstring s = wc;
+  return s;
+}
+
+Fonts::Fonts() : MODIFIED_COLOR(RGB(0, 0, 128)),
+  m_bProtectSymbolSupportedTreeList(true), m_bProtectSymbolSupportedAddEdit(true),
+  m_bAttachmentSymbolSupportedTreeList(true), m_bAttachmentSymbolSupportedAddEdit(true)
+{
+  m_pTreeListFont = new CFont;
+  m_pAddEditFont = new CFont;
   m_pDragFixFont = new CFont;
   m_pPasswordFont = new CFont;
   m_pNotesFont = new CFont;
+
+  m_pItalicTreeListFont = new CFont;
+  m_pItalicAddEditFont = new CFont;
+
+  // Protected entry symbol
+  const uint32_t newprotectedsymbol = 0x1f512;  // Padlock
+
+  // Convert UTF-32 to UTF-16 or a surrogate pair of UTF-16
+  m_sProtect = Utf32ToUtf16(newprotectedsymbol);
+
+  // Entry has Attachment symbol
+  const uint32_t newattachmentsymbol = 0x1F4CE;  // Paper-clip
+
+  // Convert UTF-32 to UTF-16 or a surrogate pair of UTF-16
+  m_sAttachment = Utf32ToUtf16(newattachmentsymbol);
 }
 
-void Fonts::GetCurrentFont(LOGFONT *pLF)
+void Fonts::GetTreeListFont(LOGFONT *pLF)
 {
-  ASSERT(pLF != NULL && m_pCurrentFont != NULL);
-  if (pLF == NULL || m_pCurrentFont == NULL)
+  ASSERT(pLF != NULL && m_pTreeListFont != NULL);
+  if (pLF == NULL || m_pTreeListFont == NULL)
     return;
 
-  m_pCurrentFont->GetLogFont(pLF);
+  m_pTreeListFont->GetLogFont(pLF);
 }
 
-void Fonts::SetCurrentFont(LOGFONT *pLF)
+void Fonts::SetTreeListFont(LOGFONT *pLF, const int iPtSz)
 {
   ASSERT(pLF != NULL);
   if (pLF == NULL)
     return;
 
-  if (m_pCurrentFont == NULL) {
-    m_pCurrentFont = new CFont;
+  if (m_pTreeListFont == NULL) {
+    m_pTreeListFont = new CFont;
   } else {
-    m_pCurrentFont->DeleteObject();
+    m_pTreeListFont->DeleteObject();
   }
-  m_pCurrentFont->CreateFontIndirect(pLF);
+
+  if (iPtSz == 0) {
+    m_pTreeListFont->CreateFontIndirect(pLF);
+  } else {
+    LOGFONT lf(*pLF);
+    lf.lfHeight = iPtSz;
+    m_pTreeListFont->CreatePointFontIndirect(&lf);
+  }
+}
+
+void Fonts::GetAddEditFont(LOGFONT *pLF)
+{
+  ASSERT(pLF != NULL && m_pAddEditFont != NULL);
+  if (pLF == NULL || m_pAddEditFont == NULL)
+    return;
+
+  m_pAddEditFont->GetLogFont(pLF);
+}
+
+void Fonts::SetAddEditFont(LOGFONT *pLF, const int iPtSz)
+{
+  ASSERT(pLF != NULL);
+  if (pLF == NULL)
+    return;
+
+  if (m_pAddEditFont == NULL) {
+    m_pAddEditFont = new CFont;
+  } else {
+    m_pAddEditFont->DeleteObject();
+  }
+
+  if (iPtSz == 0) {
+    m_pAddEditFont->CreateFontIndirect(pLF);
+  } else {
+    LOGFONT lf(*pLF);
+    lf.lfHeight = iPtSz;
+    m_pAddEditFont->CreatePointFontIndirect(&lf);
+  }
+
+  // Set up Add/Edit italic font
+  if (m_pItalicAddEditFont == NULL) {
+    m_pItalicAddEditFont = new CFont;
+  } else {
+    m_pItalicAddEditFont->DeleteObject();
+  }
+
+  // Get current font - values depend on actions above
+  LOGFONT lf_italic;
+  m_pAddEditFont->GetLogFont(&lf_italic);
+
+  // Make it italic and create "modified" font
+  lf_italic.lfItalic = TRUE;
+  m_pItalicAddEditFont->CreateFontIndirect(&lf_italic);
 }
 
 void Fonts::GetPasswordFont(LOGFONT *pLF)
@@ -123,17 +241,39 @@ void Fonts::GetDefaultPasswordFont(LOGFONT &lf)
   memcpy(&lf, &dfltPasswordLogfont, sizeof(LOGFONT));
 }
 
-void Fonts::SetPasswordFont(LOGFONT *pLF)
+void Fonts::GetDefaultTreeListFont(LOGFONT &lf)
+{
+  memcpy(&lf, &dfltTreeListFont, sizeof(LOGFONT));
+}
+
+void Fonts::GetDefaultAddEditFont(LOGFONT &lf)
+{
+  memcpy(&lf, &dfltAddEditLogfont, sizeof(LOGFONT));
+}
+
+void Fonts::GetDefaultNotesFont(LOGFONT &lf)
+{
+  memcpy(&lf, &dfltNotesLogfont, sizeof(LOGFONT));
+}
+
+void Fonts::SetPasswordFont(LOGFONT *pLF, const int iPtSz)
 {
   if (m_pPasswordFont == NULL) {
     m_pPasswordFont = new CFont;
   } else {
     m_pPasswordFont->DeleteObject();
   }
-  m_pPasswordFont->CreateFontIndirect(pLF == NULL ? &dfltPasswordLogfont : pLF);
+
+  if (iPtSz == 0 || pLF == NULL) {
+    m_pPasswordFont->CreateFontIndirect(pLF == NULL ? &dfltPasswordLogfont : pLF);
+  } else {
+    LOGFONT lf(*pLF);
+    lf.lfHeight = iPtSz;
+    m_pPasswordFont->CreatePointFontIndirect(&lf);
+  }
 }
 
-void Fonts::ApplyPasswordFont(CWnd* pDlgItem)
+void Fonts::ApplyPasswordFont(CWnd *pDlgItem)
 {
   ASSERT(pDlgItem != NULL);
   if (pDlgItem == NULL)
@@ -158,7 +298,7 @@ void Fonts::GetNotesFont(LOGFONT *pLF)
   m_pNotesFont->GetLogFont(pLF);
 }
 
-void Fonts::SetNotesFont(LOGFONT *pLF)
+void Fonts::SetNotesFont(LOGFONT *pLF, const int iPtSz)
 {
   ASSERT(pLF != NULL);
   if (pLF == NULL)
@@ -169,53 +309,112 @@ void Fonts::SetNotesFont(LOGFONT *pLF)
   } else {
     m_pNotesFont->DeleteObject();
   }
-  m_pNotesFont->CreateFontIndirect(pLF);
+
+  if (iPtSz == 0) {
+    m_pNotesFont->CreateFontIndirect(pLF);
+  } else {
+    LOGFONT lf(*pLF);
+    lf.lfHeight = iPtSz;
+    m_pNotesFont->CreatePointFontIndirect(&lf);
+  }
 }
 
-static CString GetToken(CString& str, LPCWSTR c)
+#ifdef DEBUG
+void FixFontPreference(std::wstring &sFont)
 {
-  // helper function for ExtractFont()
-  int pos = str.Find(c);
-  CString token = str.Left(pos);
-  str = str.Mid(pos + 1);
-  return token;
-}
+  // Need to cope with differences between wxWidgets wxFont GetNativeFontInfoDesc
+  // and our MFC implementation if they share the same config file, which will
+  // only be during testing until wxWdigets replaces MFC version on WIndows!
 
-void Fonts::ExtractFont(const CString &str, LOGFONT &lf)
+  // GetNativeFontInfoDesc adds an extra version paramater at the start of this string
+  // and uses semi-colons to delimit values
+
+  // MFC font preference is missing the first 'version' value at the start of this string
+  // and uses commas to delimit values
+
+#ifdef __WX__
+  // wxWidgets fails safely if given a MFC created font preference - just doesn't set font
+  // This will NEVER be used as in the  MFC source but consider putting this routine in
+  // the wx build whereever it uses a font preference string.
+  if (sFont.find(L',') != -1) {
+    // First replace commans with semi-colons
+    std::replace(sFont.begin(), sFont.end(), L',', L';');
+
+    // Count the number of delimiters
+    size_t count = std::count(sFont.begin(), sFont.end(), L';');
+
+    // Add first value, which is a version, if only 13 (MFC Windows)
+    if (count == 13)
+      sFont = L"0;" + sxFont;
+  }
+#else
+  // MFC does NOT fail safely if given a wxWdigets created font preference
+  if (sFont.find(L';') != -1) {
+    // First replace semi-colons with commas
+    std::replace(sFont.begin(), sFont.end(), L';', L',');
+
+    // Count the number of delimiters
+    size_t count = std::count(sFont.begin(), sFont.end(), L',');
+
+    // Skip first value, which is a version, if more than 13 (wxWidgets)
+    if (count > 13) {
+      size_t pos = sFont.find(L",");
+      sFont.erase(0, pos + 1);
+    }
+  }
+#endif
+}
+#endif
+
+bool Fonts::ExtractFont(const std::wstring &str, LOGFONT &lf)
 {
-  CString s(str);
+  std::wstring sFont = str;
+#ifdef DEBUG
+  FixFontPreference(sFont);
+#endif
+
+  // Tokenize
+  std::vector<std::wstring> vtokens;
+  size_t pos = 0;
+  std::wstring token;
+  while ((pos = sFont.find(L',')) != std::wstring::npos) {
+    token = sFont.substr(0, pos);
+    vtokens.push_back(token);
+    sFont.erase(0, pos + 1);
+  }
+  vtokens.push_back(sFont);
+
+  if (vtokens.size() != 14)
+    return false;
+
   SecureZeroMemory(&lf, sizeof(lf));
-  lf.lfHeight      = _wtol((LPCWSTR)GetToken(s, L","));
-  lf.lfWidth       = _wtol((LPCWSTR)GetToken(s, L","));
-  lf.lfEscapement  = _wtol((LPCWSTR)GetToken(s, L","));
-  lf.lfOrientation = _wtol((LPCWSTR)GetToken(s, L","));
-  lf.lfWeight      = _wtol((LPCWSTR)GetToken(s, L","));
+  lf.lfHeight         = _wtol(vtokens[0].c_str());
+  lf.lfWidth          = _wtol(vtokens[1].c_str());
+  lf.lfEscapement     = _wtol(vtokens[2].c_str());
+  lf.lfOrientation    = _wtol(vtokens[3].c_str());
+  lf.lfWeight         = _wtol(vtokens[4].c_str());
+  lf.lfItalic         = (BYTE)_wtoi(vtokens[5].c_str());
+  lf.lfUnderline      = (BYTE)_wtoi(vtokens[6].c_str());
+  lf.lfStrikeOut      = (BYTE)_wtoi(vtokens[7].c_str());
+  lf.lfCharSet        = (BYTE)_wtoi(vtokens[8].c_str());
+  lf.lfOutPrecision   = (BYTE)_wtoi(vtokens[9].c_str());
+  lf.lfClipPrecision  = (BYTE)_wtoi(vtokens[10].c_str());
+  lf.lfQuality        = (BYTE)_wtoi(vtokens[11].c_str());
+  lf.lfPitchAndFamily = (BYTE)_wtoi(vtokens[12].c_str());
 
-#pragma warning(push)
-#pragma warning(disable:4244) //conversion from 'int' to 'BYTE', possible loss of data
-  lf.lfItalic         = _wtoi((LPCWSTR)GetToken(s, L","));
-  lf.lfUnderline      = _wtoi((LPCWSTR)GetToken(s, L","));
-  lf.lfStrikeOut      = _wtoi((LPCWSTR)GetToken(s, L","));
-  lf.lfCharSet        = _wtoi((LPCWSTR)GetToken(s, L","));
-  lf.lfOutPrecision   = _wtoi((LPCWSTR)GetToken(s, L","));
-  lf.lfClipPrecision  = _wtoi((LPCWSTR)GetToken(s, L","));
-  lf.lfQuality        = _wtoi((LPCWSTR)GetToken(s, L","));
-  lf.lfPitchAndFamily = _wtoi((LPCWSTR)GetToken(s, L","));
-#pragma warning(pop)
-
-  wcscpy_s(lf.lfFaceName, LF_FACESIZE, s);
+  wcscpy_s(lf.lfFaceName, LF_FACESIZE, vtokens[13].c_str());
+  return true;
 }
-
 
 void Fonts::SetUpFont(CWnd *pWnd, CFont *pfont)
 {
   // Set main font
-  m_pCurrentFont = pfont;
+  m_pTreeListFont = pfont;
   pWnd->SetFont(pfont);
 
   // Set up special fonts
   // Remove old fonts
-  m_pModifiedFont->DeleteObject();
+  m_pItalicTreeListFont->DeleteObject();
   m_pDragFixFont->DeleteObject();
   
   // Get current font
@@ -224,7 +423,7 @@ void Fonts::SetUpFont(CWnd *pWnd, CFont *pfont)
 
   // Make it italic and create "modified" font
   lf.lfItalic = TRUE;
-  m_pModifiedFont->CreateFontIndirect(&lf);
+  m_pItalicTreeListFont->CreateFontIndirect(&lf);
   
   // Make DragFix font same height as user selected font
   DragFixLogfont.lfHeight = lf.lfHeight;
@@ -232,20 +431,20 @@ void Fonts::SetUpFont(CWnd *pWnd, CFont *pfont)
   m_pDragFixFont->CreateFontIndirect(&DragFixLogfont);
 }
 
-LONG Fonts::CalcHeight() const
+LONG Fonts::CalcHeight(const bool bIncludeNotesFont) const
 {
   //Get max height from current/modified/password font
   TEXTMETRIC tm;
   HDC hDC = ::GetDC(NULL);
-  
-  HFONT hFontOld = (HFONT)SelectObject(hDC, m_pCurrentFont->GetSafeHandle());
+
+  HFONT hFontOld = (HFONT)SelectObject(hDC, m_pTreeListFont->GetSafeHandle());
 
   // Current
   GetTextMetrics(hDC, &tm);
   LONG height = tm.tmHeight + tm.tmExternalLeading;
 
   // Modified
-  SelectObject(hDC, m_pModifiedFont->GetSafeHandle());
+  SelectObject(hDC, m_pItalicTreeListFont->GetSafeHandle());
   GetTextMetrics(hDC, &tm);
   if (height < tm.tmHeight + tm.tmExternalLeading)
     height = tm.tmHeight + tm.tmExternalLeading;
@@ -256,9 +455,137 @@ LONG Fonts::CalcHeight() const
   if (height < tm.tmHeight + tm.tmExternalLeading)
     height = tm.tmHeight + tm.tmExternalLeading;
 
+  if (bIncludeNotesFont) {
+    // Notes - only for List View if Notes column present
+    SelectObject(hDC, m_pNotesFont->GetSafeHandle());
+    GetTextMetrics(hDC, &tm);
+    if (height < tm.tmHeight + tm.tmExternalLeading)
+      height = tm.tmHeight + tm.tmExternalLeading;
+  }
+
   // Tidy up
   SelectObject(hDC, hFontOld);
   ::ReleaseDC(NULL, hDC);
 
   return height;
+}
+
+std::wstring Fonts::GetProtectedSymbol(const PWSFont font)
+{
+  if (font == TREELIST) {
+    return m_bProtectSymbolSupportedTreeList ? m_sProtect : L"#";
+  } else {
+    return m_bProtectSymbolSupportedAddEdit ? m_sProtect : L"#";
+  }
+}
+
+std::wstring Fonts::GetAttachmentSymbol(const PWSFont font)
+{
+  if (font == TREELIST) {
+    return m_bProtectSymbolSupportedTreeList ? m_sAttachment : L"+";
+  } else {
+    return m_bProtectSymbolSupportedAddEdit ? m_sAttachment : L"+";
+  }
+}
+
+bool Fonts::IsSymbolSuported(const Symbol symbol, const PWSFont font)
+{
+  if (symbol == PROTECT) {
+    if (font == TREELIST) {
+      return m_bProtectSymbolSupportedTreeList;
+    } else {
+      return m_bProtectSymbolSupportedAddEdit;
+    }
+  } else {
+    if (font == TREELIST) {
+      return m_bAttachmentSymbolSupportedTreeList;
+    } else {
+      return m_bAttachmentSymbolSupportedAddEdit;
+    }
+  }
+}
+
+void Fonts::VerifySymbolsSupported()
+{
+  bool bWindows10 = pws_os::IsWindows10OrGreater();
+
+  // If supported - fine - use it
+  // If not, use it if running under Windows 10 which seems to handle this nicely
+  m_bProtectSymbolSupportedTreeList = IsCharacterSupported(m_sProtect) ? true : bWindows10;
+  m_bProtectSymbolSupportedAddEdit = IsCharacterSupported(m_sProtect, false) ? true : bWindows10;
+
+  // If supported - fine - use it
+  // If not, use it if running under Windows 10 which seems to handle this nicely
+  m_bAttachmentSymbolSupportedTreeList = IsCharacterSupported(m_sAttachment) ? true : bWindows10;
+  m_bAttachmentSymbolSupportedAddEdit = IsCharacterSupported(m_sAttachment, false) ? true : bWindows10;
+}
+
+bool Fonts::IsCharacterSupported(std::wstring &sSymbol, const bool bTreeListFont)
+{
+  HRESULT hr;
+  int cItems, cMaxItems = 2;
+  bool bSupported(false);
+  SCRIPT_ITEM items[3];  // Number should be (cMaxItems + 1)
+
+  ASSERT(sSymbol.length() < 3);
+
+  // Itemize - Uniscribe function
+  hr = ScriptItemize(sSymbol.c_str(), (int)sSymbol.length(), cMaxItems, NULL, NULL, items, &cItems);
+
+  if (SUCCEEDED(hr) == FALSE)
+    return bSupported;
+
+  ASSERT(cItems == 1);
+
+  SCRIPT_CACHE sc = NULL;
+
+  CDC ScreenDC;
+  ScreenDC.CreateCompatibleDC(NULL);
+  HFONT hOldFont;
+  CFont *pFont;
+
+  if (bTreeListFont) {
+    pFont = m_pTreeListFont;
+  } else {
+    pFont = m_pAddEditFont;
+  }
+
+  hOldFont = (HFONT)ScreenDC.SelectObject(pFont->GetSafeHandle());
+
+  for (int i = 0; i < cItems; i++) {
+    int idx = items[i].iCharPos;
+    int len = items[i + 1].iCharPos - idx;
+    int cMaxGlyphs = len * 2 + 16;  // As recommended by Uniscribe documentation
+    int cGlyphs = 0;
+
+    WORD *pwLogClust = (WORD *)malloc(sizeof(WORD) * cMaxGlyphs);
+    WORD *pwOutGlyphs = (WORD *)malloc(sizeof(WORD) * cMaxGlyphs);
+    SCRIPT_VISATTR *psva = (SCRIPT_VISATTR *)malloc(sizeof(SCRIPT_VISATTR) * cMaxGlyphs);
+
+    // Shape - Uniscribe function
+    hr = ScriptShape(ScreenDC.GetSafeHdc(), &sc, sSymbol.substr(idx).c_str(), len, cMaxGlyphs,
+      &items[i].a, pwOutGlyphs, pwLogClust, psva, &cGlyphs);
+
+    if (SUCCEEDED(hr) == FALSE)
+      goto clean;
+
+    if (pwOutGlyphs[0] != 0)
+      bSupported = true;
+
+  clean:
+    // Free up storage
+    free(pwOutGlyphs);
+    free(pwLogClust);
+    free(psva);
+
+    if (SUCCEEDED(hr) == FALSE)
+      break;
+  }
+
+  // Free cache - Uniscribe function
+  ScriptFreeCache(&sc);
+
+  ScreenDC.SelectObject(hOldFont);
+
+  return bSupported;
 }

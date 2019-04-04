@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -29,16 +29,20 @@
 #include <wx/msw/msvcrt.h>
 #endif
 
+#include <wx/taskbar.h>
+#include <wx/tokenzr.h>
+#include <wx/versioninfo.h>
+
 /*
  * Reads a file into a PWScore object, and displays an appropriate msgbox
  * in case of failure.  Returns PWScore::SUCCESS on success
  */
 
 int ReadCore(PWScore& othercore, const wxString& file, const StringX& combination,
-             bool showMsgbox /*= true*/, wxWindow* msgboxParent /*= NULL*/,
+             bool showMsgbox /*= true*/, wxWindow* msgboxParent /*= nullptr*/,
         bool setupCopy /*= false*/)
 {
-  othercore.ClearData();
+  othercore.ClearDBData();
 
   StringX dbpath(tostringx(file));
   int rc = othercore.ReadFile(dbpath, combination);
@@ -72,7 +76,6 @@ int ReadCore(PWScore& othercore, const wxString& file, const StringX& combinatio
 
   return rc;
 }
-
 
 void HideWindowRecursively(wxTopLevelWindow* win, wxWindowList& hiddenWindows)
 {
@@ -184,7 +187,7 @@ void ShowHideText(wxTextCtrl *&txtCtrl, const wxString &text,
   txtCtrl = new wxTextCtrl(parent, id, text,
                            wxDefaultPosition, wxDefaultSize,
                            show ? 0 : wxTE_PASSWORD);
-  if (validator != NULL)
+  if (validator != nullptr)
     txtCtrl->SetValidator(*validator);
   ApplyPasswordFont(txtCtrl);
   sizer->Replace(tmp, txtCtrl);
@@ -197,3 +200,21 @@ void ShowHideText(wxTextCtrl *&txtCtrl, const wxString &text,
 }
 
 int pless(int* first, int* second) { return *first - *second; }
+
+// Wrapper for wxTaskBarIcon::IsAvailable() that doesn't crash
+// on Fedora or Ubuntu
+bool IsTaskBarIconAvailable()
+{
+#if defined(__WXGTK__)
+  const wxVersionInfo verInfo = wxGetLibraryVersionInfo();
+  int major = verInfo.GetMajor();
+  int minor = verInfo.GetMinor();
+  int micro = verInfo.GetMicro();
+  if (major < 3 || (major == 3 && ((minor == 0 && micro < 4) || (minor == 1 && micro < 1)))) {
+    const wxLinuxDistributionInfo ldi = wxGetLinuxDistributionInfo();
+    if (ldi.Id.IsEmpty() || ldi.Id == wxT("Ubuntu") || ldi.Id == wxT("Fedora"))
+      return false;
+  }
+#endif
+  return wxTaskBarIcon::IsAvailable();
+}

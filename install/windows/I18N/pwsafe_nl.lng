@@ -96,9 +96,9 @@ LangString LANG_SELECT ${LANG_DUTCH} "Kies een taal voor de installatie"
 LangString LANGUAGE_SUPPORT ${LANG_DUTCH} "Taal support"
 LangString ENGLISH_SUPPORT ${LANG_DUTCH} "Engels"
 ; CHINESE_CN_SUPPORT "Chinese (Simplified)"
-LangString CHINESE_CN_SUPPORT ${LANG_NEW} "en:Chinese (Simplified)"
+LangString CHINESE_CN_SUPPORT ${LANG_DUTCH} "en:Chinese (Simplified)"
 ; CHINESE_TW_SUPPORT "Chinese (Traditional)"
-LangString CHINESE_TW_SUPPORT ${LANG_NEW} "en:Chinese (Traditional)"
+LangString CHINESE_TW_SUPPORT ${LANG_DUTCH} "en:Chinese (Traditional)"
 LangString GERMAN_SUPPORT ${LANG_DUTCH} "Duits"
 LangString SPANISH_SUPPORT ${LANG_DUTCH} "Spaans"
 LangString SWEDISH_SUPPORT ${LANG_DUTCH} "Zweeds"
@@ -113,6 +113,7 @@ LangString KOREAN_SUPPORT ${LANG_DUTCH} "Koreaans"
 LangString CZECH_SUPPORT ${LANG_DUTCH} "Tsjechisch"
 LangString TURKISH_SUPPORT ${LANG_DUTCH} "Turks"
 LangString HUNGARIAN_SUPPORT ${LANG_DUTCH} "Hongaars"
+LangString SLOVENIAN_SUPPORT ${LANG_DUTCH} "Slovenian"
 
 ; LANG_PROGRAM "Program Language"
 LangString LANG_PROGRAM ${LANG_DUTCH} "Programma-taal"
@@ -128,6 +129,12 @@ LangString SORRY_NO_ME ${LANG_DUTCH} "Sorry, Windows ME wordt niet meer onderste
 
 ; SORRY_NO_2K "Sorry, Windows 2000 is no longer supported. Try PasswordSafe 3.18"
 LangString SORRY_NO_2K ${LANG_DUTCH} "Sorry, Windows 2000 wordt niet meer ondersteund. Probeer PasswordSafe 3.18"
+
+; LangString Icon_description_Uninstall "Password Safe Uninstall"
+LangString Icon_description_Uninstall ${LANG_DUTCH} "Password Safe Uninstall"
+
+; LangString Icon_description_Help  "Password Safe Help"
+LangString Icon_description_Help ${LANG_DUTCH} "Password Safe Help"
 
 ;=================================================================
 ; End of pwsafe_nl.lng

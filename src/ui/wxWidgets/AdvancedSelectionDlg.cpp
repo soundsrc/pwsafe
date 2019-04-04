@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -45,7 +45,6 @@ BEGIN_EVENT_TABLE( AdvancedSelectionPanel, wxPanel )
   EVT_BUTTON( ID_REMOVE_SOME, AdvancedSelectionPanel::OnRemoveSome )
   EVT_BUTTON( ID_REMOVE_ALL, AdvancedSelectionPanel::OnRemoveAll )
 END_EVENT_TABLE()
-
 
 AdvancedSelectionPanel::AdvancedSelectionPanel(wxWindow* parentWnd,
                                                SelectionCriteria* existingCriteria,
@@ -127,7 +126,7 @@ void AdvancedSelectionPanel::CreateControls(wxWindow* parentWnd)
       //second row is the listboxes, with buttons in between
 
       wxListBox* lbAvailable = new wxListBox(this, ID_LB_AVAILABLE_FIELDS, wxDefaultPosition,
-                                             wxDefaultSize, 0, NULL, wxLB_EXTENDED);
+                                             wxDefaultSize, 0, nullptr, wxLB_EXTENDED);
       grid->Add(lbAvailable, wxSizerFlags().Expand());
 
       wxBoxSizer* buttonBox = new wxBoxSizer(wxVERTICAL);
@@ -144,7 +143,7 @@ void AdvancedSelectionPanel::CreateControls(wxWindow* parentWnd)
       grid->Add(buttonBox, wxSizerFlags().Align(wxALIGN_CENTER_VERTICAL));
 
       wxListBox* lbSelected = new wxListBox(this, ID_LB_SELECTED_FIELDS, wxDefaultPosition,
-                                            wxDefaultSize, 0, NULL, wxLB_EXTENDED);
+                                            wxDefaultSize, 0, nullptr, wxLB_EXTENDED);
       grid->Add(lbSelected, wxSizerFlags().Expand());
 
       dlgSizer->Add(grid, wxSizerFlags(1).Expand().Border(wxLEFT | wxRIGHT, SideMargin));

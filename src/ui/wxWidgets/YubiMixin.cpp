@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -35,10 +35,9 @@ void CYubiMixin::SetupMixin(wxWindow *btn, wxWindow *status)
   m_status = status;
   m_present = !IsYubiInserted(); // lie to trigger correct actions in timer even
   // Hide Yubi controls if user doesn't have one:
-  if (m_btn != NULL) m_btn->Show(yubiExists());
-  if (m_status != NULL) m_status->Show(yubiExists());
+  if (m_btn != nullptr) m_btn->Show(yubiExists());
+  if (m_status != nullptr) m_status->Show(yubiExists());
 }
-
 
 bool CYubiMixin::yubiExists() const
 {
@@ -69,10 +68,10 @@ void CYubiMixin::HandlePollingTimer()
 {
   // Show Yubi controls when inserted first time:
   if (yubiExists()) {
-    wxWindow *parent = NULL; // assume both have same parent
-    if (m_btn != NULL) {m_btn->Show(true); parent = m_btn->GetParent();}
-    if (m_status != NULL) {m_status->Show(true); parent = m_btn->GetParent();}
-    if (parent != NULL) parent->Layout();
+    wxWindow *parent = nullptr; // assume both have same parent
+    if (m_btn != nullptr) {m_btn->Show(true); parent = m_btn->GetParent();}
+    if (m_status != nullptr) {m_status->Show(true); parent = m_btn->GetParent();}
+    if (parent != nullptr) parent->Layout();
   }
 
   // Currently hmac check is blocking (ugh), so no need to check here
@@ -169,7 +168,6 @@ bool CYubiMixin::PerformChallengeResponse(wxWindow *win,
   return retval;
 }
 
-
 StringX CYubiMixin::Bin2Hex(const unsigned char *buf, int len) const
 {
   std::wostringstream os;
@@ -180,4 +178,3 @@ StringX CYubiMixin::Bin2Hex(const unsigned char *buf, int len) const
   }
   return StringX(os.str().c_str());
 }
-

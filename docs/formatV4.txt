@@ -1,7 +1,7 @@
 PasswordSafe database format description version 4.01
 -----------------------------------------------------
 
-Copyright (c) 2013-2016 Rony Shapiro <ronys@pwsafe.org>.
+Copyright (c) 2013-2018 Rony Shapiro <ronys@pwsafe.org>.
 All rights reserved. Use of the code is allowed under the Artistic
 License terms, as specified in the LICENSE file distributed with this
 code, or available from
@@ -97,7 +97,7 @@ hash-function-based key stretching algorithm in [PBKDF2], with SHA-256
 i's passphrase. All keyblocks protect the same K and L values (see
 below).
 
-2.2.4 KW is the Key Wrap algorithm defined in [RFC3349], using the
+2.2.4 KW is the Key Wrap algorithm defined in [RFC3394], using the
 user-specified encryption algorithm (TwoFish, AES,...).
 
 2.2.5 KW(Pi',K) is the wrapped random encryption key K that is used to
@@ -232,6 +232,8 @@ Recently Used Entries       0x0f        Text                         [14]
 Named Password Policies     0x10        Text                         [15]
 Empty Groups                0x11        Text                         [16]
 Yubico                      0x12        Text                         [13]
+Timestamp of last master
+password change             0x13        time_t        Y              [5]
 End of Entry                0xff        [empty]       Y              [17]
 
 [1] The version number of the database format. For this version, the value
@@ -379,12 +381,13 @@ Credit Card Number          0x1c        Text          N              [23]
 Credit Card Expiration      0x1d        Text          N              [23]
 Credit Card Verif. Value    0x1e        Text          N              [23]
 Credit Card PIN             0x1f        Text          N              [23]
-BaseUUID                    0x41        UUID          Y              [24]
+QR Code                     0x20        Text          N              [24]
+BaseUUID                    0x41        UUID          Y              [25]
 AliasUUID                   0x42        UUID          Y
 ShortcutUUID                0x43        UUID          Y
-Unknown (testing)           0xdf        -             N              [25]
-Implementation-specific     0xe0-0xfe   -             N              [26]
-End of Entry                0xff        [empty]       Y              [27]
+Unknown (testing)           0xdf        -             N              [26]
+Implementation-specific     0xe0-0xfe   -             N              [27]
+End of Entry                0xff        [empty]       Y              [28]
 
 [1] UUID of a password entry record. Representation is described in
 Section 3.1.1.
@@ -433,7 +436,7 @@ creation times and values of the last few passwords used in the current
 entry, in the following format:
     "fmmnnTLPTLP...TLP"
 where:
-    f  = {0,1} if password history is on/off
+    f  = {0,1} if password history is off(0) / on(1)
     mm = 2 hexadecimal digits max size of history list (i.e. max = 255)
     nn = 2 hexadecimal digits current size of history list
     T  = Time password was set (time_t written out in %08x)
@@ -533,14 +536,17 @@ least 10 bytes.
 - CVV (CVV2) is three or four digits.
 - PIN is four to twelve digits long (ISO-9564)
 
-[24] UUID of a reference record. Representation is described in Section
+[24] UTF-8 encoded text used for QR code generation. Content will be converted
+to QR code without any further encoding.
+
+[25] UUID of a reference record. Representation is described in Section
 3.1.1.
 
-[25] Reserved for testing forward compatability.
+[26] Reserved for testing forward compatability.
 
-[26] Reserved for application-specific use. See 4.2.2.
+[27] Reserved for application-specific use. See 4.2.2.
 
-[27] An explicit end of entry field is useful for supporting new fields
+[28] An explicit end of entry field is useful for supporting new fields
 without breaking backwards compatability.
 
 3.4 Attachments

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -30,7 +30,7 @@ public:
 	enum { IDD = IDD_NPWP_LIST_ENTRIES };
 
 protected:
-	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
+	virtual void DoDataExchange(CDataExchange *pDX);    // DDX/DDV support
   virtual BOOL OnInitDialog();
 
   afx_msg void OnHeaderClicked(NMHDR *pNotifyStruct, LRESULT *pLResult);
@@ -46,4 +46,6 @@ private:
   StringX m_sxPolicyName;
 
   static int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort);
+
+  CFont *m_pAddEditFont;
 };

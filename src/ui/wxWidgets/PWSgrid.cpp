@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -10,26 +10,27 @@
 *
 */
 // For compilers that support precompilation, includes "wx/wx.h".
-#include "wx/wxprec.h"
+#include <wx/wxprec.h>
 
 #ifdef __BORLANDC__
 #pragma hdrstop
 #endif
 
 #ifndef WX_PRECOMP
-#include "wx/wx.h"
+#include <wx/wx.h>
 #endif
 
 ////@begin includes
 ////@end includes
 
-#include <utility> // for make_pair
+#include <wx/memory.h>
+
 #include "PWSgrid.h"
 #include "passwordsafeframe.h" // for DispatchDblClickAction()
-#include <wx/memory.h>
-#include <algorithm>
-#include <functional>
 #include "./PWSgridtable.h"
+
+#include <algorithm>
+#include <utility> // for make_pair
 
 #ifdef __WXMSW__
 #include <wx/msw/msvcrt.h>
@@ -46,7 +47,6 @@ using pws_os::CUUID;
 
 IMPLEMENT_CLASS( PWSGrid, wxGrid )
 
-
 /*!
  * PWSGrid event table definition
  */
@@ -57,7 +57,6 @@ BEGIN_EVENT_TABLE( PWSGrid, wxGrid )
   EVT_GRID_CELL_RIGHT_CLICK( PWSGrid::OnCellRightClick )
   EVT_GRID_CELL_LEFT_DCLICK( PWSGrid::OnLeftDClick )
   EVT_GRID_SELECT_CELL( PWSGrid::OnSelectCell )
-  EVT_CHAR( PWSGrid::OnChar )
   EVT_CONTEXT_MENU(PWSGrid::OnContextMenu)
   EVT_CUSTOM(wxEVT_GUI_DB_PREFS_CHANGE, wxID_ANY, PWSGrid::OnDBGUIPrefsChange)
 ////@end PWSGrid event table entries
@@ -79,8 +78,27 @@ PWSGrid::PWSGrid(wxWindow* parent, PWScore &core,
 {
   Init();
   Create(parent, id, pos, size, style);
+  
+  auto *header = wxGrid::GetGridColHeader();
+  
+  if (header) {
+    
+    // Handler for double click events on column header separator
+    header->Bind(
+      wxEVT_HEADER_SEPARATOR_DCLICK, 
+      [=](wxHeaderCtrlEvent& event) {
+        wxGrid::AutoSizeColumn(event.GetColumn());
+      }
+    );
+    
+    // Handler for single click events on column header
+    header->Bind(
+      wxEVT_HEADER_CLICK, 
+      &PWSGrid::OnHeaderClick,
+      this
+    );
+  }
 }
-
 
 /*!
  * PWSGrid creator
@@ -99,9 +117,11 @@ bool PWSGrid::Create(wxWindow* parent, wxWindowID id, const wxPoint& pos, const 
   UseNativeColHeader(true);
 #endif
 ////@end PWSGrid creation
+  
+  UpdateSorting();
+  
   return true;
 }
-
 
 /*!
  * PWSGrid destructor
@@ -113,7 +133,6 @@ PWSGrid::~PWSGrid()
 ////@end PWSGrid destruction
 }
 
-
 /*!
  * Member initialisation
  */
@@ -123,7 +142,6 @@ void PWSGrid::Init()
 ////@begin PWSGrid member initialisation
 ////@end PWSGrid member initialisation
 }
-
 
 /*!
  * Control creation for PWSGrid
@@ -204,11 +222,23 @@ void PWSGrid::AddItem(const CItemData &item, int row)
   InsertRows(row);
 }
 
+void PWSGrid::RefreshItem(const CItemData &item, int row)
+{
+  int nRows = GetNumberRows();
+  if (row == -1)
+    row = nRows;
+  uuid_array_t uuid;
+  item.GetUUID(uuid);
+  m_row_map.insert(std::make_pair(row, CUUID(uuid)));
+  m_uuid_map.insert(std::make_pair(CUUID(uuid), row));
+  RefreshRow(row);
+}
+
 void PWSGrid::UpdateItem(const CItemData &item)
 {
   uuid_array_t uuid;
   item.GetUUID(uuid);
-  UUIDRowMapT::iterator iter = m_uuid_map.find(CUUID(uuid));
+  auto iter = m_uuid_map.find(CUUID(uuid));
   if (iter != m_uuid_map.end()) {
     int row = iter->second;
     DeleteRows(row);
@@ -252,9 +282,8 @@ struct moveup : public std::binary_function<UUIDRowMapT::value_type, int, void> 
 
 void PWSGrid::Remove(const CUUID &uuid)
 {
-  UUIDRowMapT::iterator iter = m_uuid_map.find(uuid);
+  auto iter = m_uuid_map.find(uuid);
   if (iter != m_uuid_map.end()) {
-
     const int row = iter->second;
 
     //The UI element must be removed first, since the entry in m_core is deleted after
@@ -315,15 +344,15 @@ size_t PWSGrid::GetNumItems() const
 void PWSGrid::DeleteItems(int row, size_t numItems)
 {
   for (size_t N = 0; N < numItems; ++N) {
-    RowUUIDMapT::iterator iter = m_row_map.find(row);
+    auto iter = m_row_map.find(row);
     if (iter != m_row_map.end()) {
-      UUIDRowMapT::iterator iter_uuid = m_uuid_map.find(iter->second);
+      auto iter_uuid = m_uuid_map.find(iter->second);
       m_row_map.erase(iter);
       if (iter_uuid != m_uuid_map.end()) {
         uuid_array_t uuid;
         iter_uuid->first.GetARep(uuid);
         m_uuid_map.erase(iter_uuid);
-        ItemListIter citer = m_core.Find(uuid);
+        auto citer = m_core.Find(uuid);
         if (citer != m_core.GetEntryEndIter()){
           m_core.SuspendOnDBNotification();
           m_core.Execute(DeleteEntryCommand::Create(&m_core,
@@ -333,7 +362,7 @@ void PWSGrid::DeleteItems(int row, size_t numItems)
       }
     }
   }
-  if (m_core.IsChanged())
+  if (m_core.HasDBChanged())
     OnPasswordListModified();
 }
 
@@ -392,19 +421,18 @@ void PWSGrid::OnContextMenu( wxContextMenuEvent& evt )
 CItemData *PWSGrid::GetItem(int row) const
 {
   if (row < 0 || row > const_cast<PWSGrid *>(this)->GetNumberRows())
-    return NULL;
-  RowUUIDMapT::const_iterator iter = m_row_map.find(row);
+    return nullptr;
+  auto iter = m_row_map.find(row);
   if (iter != m_row_map.end()) {
     uuid_array_t uuid;
     iter->second.GetARep(uuid);
-    ItemListIter itemiter = m_core.Find(uuid);
+    auto itemiter = m_core.Find(uuid);
     if (itemiter == m_core.GetEntryEndIter())
-      return NULL;
+      return nullptr;
     return &itemiter->second;
   }
-  return NULL;
+  return nullptr;
 }
-
 
 /*!
  * wxEVT_GRID_CELL_LEFT_DCLICK event handler for ID_LISTBOX
@@ -413,7 +441,7 @@ CItemData *PWSGrid::GetItem(int row) const
 void PWSGrid::OnLeftDClick( wxGridEvent& evt )
 {
   CItemData *item = GetItem(evt.GetRow());
-  if (item != NULL)
+  if (item != nullptr)
     dynamic_cast<PasswordSafeFrame *>(GetParent())->
       DispatchDblClickAction(*item);
 }
@@ -436,23 +464,9 @@ int  PWSGrid::FindItemRow(const CUUID& uu)
      return wxNOT_FOUND;
 }
 
-/*!
- * wxEVT_CHAR event handler for ID_LISTBOX
- */
-
-void PWSGrid::OnChar( wxKeyEvent& evt )
+void PWSGrid::SaveSettings() const
 {
-  if (evt.GetKeyCode() == WXK_ESCAPE &&
-      PWSprefs::GetInstance()->GetPref(PWSprefs::EscExits)) {
-    GetParent()->Close(true);
-  }
-  evt.Skip();
-}
-
-
-void PWSGrid::SaveSettings(void) const
-{
-  PWSGridTable* table = dynamic_cast<PWSGridTable*>(GetTable());
+  auto *table = dynamic_cast<PWSGridTable*>(GetTable());
   if (table)  //may not have been created/assigned
     table->SaveSettings();
 }
@@ -473,7 +487,6 @@ void PWSGrid::Clear()
   DeleteAllItems();
 }
 
-
 /*!
  * wxEVT_GRID_SELECT_CELL event handler for ID_LISTBOX
  */
@@ -490,4 +503,59 @@ void PWSGrid::SetFilterState(bool state)
   const wxColour *colour = state ? wxRED : wxBLACK;
   SetDefaultCellTextColour(*colour);
   ForceRefresh();
+}
+
+void PWSGrid::UpdateSorting()
+{
+  SortByColumn(
+    PWSprefs::GetInstance()->GetPref(PWSprefs::SortedColumn),
+    PWSprefs::GetInstance()->GetPref(PWSprefs::SortAscending)
+  );
+}
+
+void PWSGrid::OnHeaderClick(wxHeaderCtrlEvent& event)
+{
+  SortByColumn(event.GetColumn(), !IsSortOrderAscending());
+  
+  if (GetSortingColumn() != wxNOT_FOUND) {
+    PWSprefs::GetInstance()->SetPref(PWSprefs::SortedColumn , GetSortingColumn());
+    PWSprefs::GetInstance()->SetPref(PWSprefs::SortAscending, IsSortOrderAscending());
+  }
+}
+
+void PWSGrid::SortByColumn(int column, bool ascending)
+{
+  UnsetSortingColumn();
+  
+  SetSortingColumn(column, ascending);
+  
+  if (ascending) {
+    AscendingSortedMultimap collection;
+    
+    RearrangeItems<AscendingSortedMultimap> (collection, column);
+  }
+  else {
+    DescendingSortedMultimap collection;
+    
+    RearrangeItems<DescendingSortedMultimap> (collection, column);
+  }
+}
+
+template<typename ItemsCollection>
+void PWSGrid::RearrangeItems(ItemsCollection& collection, int column)
+{
+  int row = 0;
+  
+  for (row = 0; row < GetNumberRows(); row++) {
+    collection.insert(std::pair<wxString, const CItemData*>(GetCellValue(row, column), GetItem(row)));
+  }
+  
+  m_row_map.clear();
+  m_uuid_map.clear();
+  
+  row = 0;
+  
+  for (auto& item : collection) {
+    RefreshItem(*item.second, row++);
+  }
 }

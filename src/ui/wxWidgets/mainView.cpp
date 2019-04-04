@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2016 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -50,7 +50,6 @@ void PasswordSafeFrame::OnChangeToolbarType(wxCommandEvent& evt)
   }
 }
 
-
 /*!
  * wxEVT_COMMAND_MENU_SELECTED event handler for ID_LIST_VIEW
  */
@@ -60,9 +59,8 @@ void PasswordSafeFrame::OnListViewClick( wxCommandEvent& /* evt */ )
   PWSprefs::GetInstance()->SetPref(PWSprefs::LastView, _T("list"));
   ShowTree(false);
   ShowGrid(true);
-  m_currentView = GRID;
+  SetViewType(ViewType::GRID);
 }
-
 
 /*!
  * wxEVT_COMMAND_MENU_SELECTED event handler for ID_TREE_VIEW
@@ -73,18 +71,18 @@ void PasswordSafeFrame::OnTreeViewClick( wxCommandEvent& /* evt */ )
   PWSprefs::GetInstance()->SetPref(PWSprefs::LastView, _T("tree"));
   ShowGrid(false);
   ShowTree(true);
-  m_currentView = TREE;
+  SetViewType(ViewType::TREE);
 }
 
 void PasswordSafeFrame::OnExpandAll(wxCommandEvent& /*evt*/)
 {
-  wxASSERT(m_currentView == TREE);
+  wxASSERT(IsTreeView());
   m_tree->ExpandAll();
 }
 
 void PasswordSafeFrame::OnCollapseAll(wxCommandEvent& /*evt*/)
 {
-  wxASSERT(m_currentView == TREE);
+  wxASSERT(IsTreeView());
 
   //we cannot just call wxTreeCtrl::CollapseAll(), since it tries to
   //collapse the invisible root item also, and thus ASSERTs
@@ -177,7 +175,6 @@ void PasswordSafeFrame::OnShowUnsavedEntriesClick( wxCommandEvent& event )
     CurrentFilter().Empty();
   ApplyFilters();
 }
-
 
 void PasswordSafeFrame::ApplyFilters()
 {
