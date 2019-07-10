@@ -11,6 +11,7 @@
 */
 
 #include "PWYubi.h"
+#include "Util.h"
 #include "../debug.h"
 #include "../utf8conv.h"
 
@@ -198,6 +199,7 @@ PWYubi::RequestStatus PWYubi::GetResponse(unsigned char resp[PWYubi::RESPLEN])
                                   response, sizeof(response),
                                   20, &response_len)) {
       memcpy(resp, response, RESPLEN);
+      trashMemory(response, RESPLEN);
       m_reqstat = DONE;
     } else {
       if (yk_errno == YK_ETIMEOUT)

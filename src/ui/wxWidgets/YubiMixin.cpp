@@ -151,6 +151,7 @@ bool CYubiMixin::PerformChallengeResponse(wxWindow *win,
 #endif
       // The returned hash is the passkey
       response = Bin2Hex(hmac, PWYubi::RESPLEN);
+      trashMemory(hmac, sizeof(hmac));
       retval = true;
     } else {
       if (status == PWYubi::TIMEOUT) {
