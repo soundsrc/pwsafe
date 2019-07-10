@@ -320,12 +320,15 @@ void CSafeCombinationSetup::OnYubibtnClick( wxCommandEvent& /* event */ )
       err.ShowModal();
       return;
     }
+
+    m_pollingTimer->Stop();
     StringX response;
     bool oldYubiChallenge = ::wxGetKeyState(WXK_SHIFT); // for pre-0.94 databases
     if (PerformChallengeResponse(this, tostringx(m_password), response, oldYubiChallenge)) {
       m_password = response.c_str();
       EndModal(wxID_OK);
     }
+    m_pollingTimer->Start();
   }
 }
 #endif

@@ -354,6 +354,7 @@ void CSafeCombinationPrompt::OnYubibtnClick( wxCommandEvent& /* event */ )
       return;
     }
 
+    m_pollingTimer->Stop();
     StringX response;
     bool oldYubiChallenge = ::wxGetKeyState(WXK_SHIFT); // for pre-0.94 databases
     if (PerformChallengeResponse(this, m_password, response, oldYubiChallenge)) {
@@ -361,6 +362,7 @@ void CSafeCombinationPrompt::OnYubibtnClick( wxCommandEvent& /* event */ )
       ProcessPhrase();
       UpdateStatus();
     }
+    m_pollingTimer->Start();
   }
 }
 
