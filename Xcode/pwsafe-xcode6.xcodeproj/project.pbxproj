@@ -21,6 +21,7 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		3506F8BE22D59ED5005228A8 /* CryptKeyEntry.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3506F8BC22D59ED5005228A8 /* CryptKeyEntry.cpp */; };
 		354B08DF1D32363F00DA637B /* Yubikey-button.xpm in Resources */ = {isa = PBXBuildFile; fileRef = 354B08DE1D32363C00DA637B /* Yubikey-button.xpm */; };
 		354B08E01D32364900DA637B /* YubiMixin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 354B08DA1D3235C400DA637B /* YubiMixin.cpp */; };
 		354B08E11D32364C00DA637B /* yubicfg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 354B08D81D3235C400DA637B /* yubicfg.cpp */; };
@@ -243,6 +244,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		3506F8BC22D59ED5005228A8 /* CryptKeyEntry.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = CryptKeyEntry.cpp; sourceTree = "<group>"; };
+		3506F8BD22D59ED5005228A8 /* CryptKeyEntry.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CryptKeyEntry.h; sourceTree = "<group>"; };
 		354B08D81D3235C400DA637B /* yubicfg.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = yubicfg.cpp; path = ../src/ui/wxWidgets/yubicfg.cpp; sourceTree = "<group>"; };
 		354B08D91D3235C400DA637B /* yubicfg.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = yubicfg.h; path = ../src/ui/wxWidgets/yubicfg.h; sourceTree = "<group>"; };
 		354B08DA1D3235C400DA637B /* YubiMixin.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = YubiMixin.cpp; path = ../src/ui/wxWidgets/YubiMixin.cpp; sourceTree = "<group>"; };
@@ -1208,6 +1211,8 @@
 		E6ADB9A411957099004E2BE5 /* wxWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				3506F8BC22D59ED5005228A8 /* CryptKeyEntry.cpp */,
+				3506F8BD22D59ED5005228A8 /* CryptKeyEntry.h */,
 				E6C94E941FA205E9008F0072 /* pwsqrencode.h */,
 				E6C94E911FA20593008F0072 /* pwsqrcodedlg.cpp */,
 				E6C94E921FA20593008F0072 /* pwsqrcodedlg.h */,
@@ -1729,6 +1734,7 @@
 				E6EE841E11E87E9800B01518 /* CoreImpExp.cpp in Sources */,
 				E6EE841F11E87E9800B01518 /* core_st.cpp in Sources */,
 				A2FE25951C5ACFBD00210C36 /* PWStime.cpp in Sources */,
+				3506F8BE22D59ED5005228A8 /* CryptKeyEntry.cpp in Sources */,
 				E6EE842111E87E9800B01518 /* ItemData.cpp in Sources */,
 				E6EE842211E87E9800B01518 /* ItemField.cpp in Sources */,
 				E6EE842411E87E9800B01518 /* Match.cpp in Sources */,
