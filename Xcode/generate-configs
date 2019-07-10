@@ -32,10 +32,10 @@ my $libflags;
 foreach(split /\s+/, `$wxconfig --libs --unicode=yes --debug=$dbgflag`) {
 	$libflags .= $_." " if /\A-[lL]|\.a\Z/;
 }
-print "OTHER_LDFLAGS = -L/usr/local/lib ", $libflags, "\n";
+print "OTHER_LDFLAGS = -L/usr/local/lib ", $libflags, " -lykpers-1 -lyubikey\n";
 
 my $cxxflags;
 foreach(split /\s+/, `$wxconfig --cxxflags --unicode=yes --debug=$dbgflag`) {
 	$cxxflags .= $1." " if /\A-I(.+)/;
 }
-print "HEADER_SEARCH_PATHS = ", $cxxflags, "\n";
+print "HEADER_SEARCH_PATHS = ", $cxxflags, " /usr/local/include/ykpers-1\n";
