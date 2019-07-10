@@ -31,12 +31,15 @@ PWYubi::PWYubi() : m_isInited(false), m_reqstat(ERROR)
 {
   pthread_mutex_lock(&s_mutex);
   m_isInited = yk_init() != 0;
+  m_ykey = yk_open_first_key();
   pthread_mutex_unlock(&s_mutex);
 }
 
 PWYubi::~PWYubi()
 {
   pthread_mutex_lock(&s_mutex);
+  if (m_ykey != nullptr)
+	yk_close_key(m_ykey);
   if (m_isInited)
     yk_release();
   pthread_mutex_unlock(&s_mutex);
@@ -47,9 +50,7 @@ bool PWYubi::IsYubiInserted() const
   bool retval = false;
   pthread_mutex_lock(&s_mutex);
   if (m_isInited) {
-    YK_KEY *ykey = yk_open_first_key();
-    if (ykey != nullptr) {
-      yk_close_key(ykey);
+    if (m_ykey != nullptr) {
       retval = true;
     } else {
       // reset s.t. we'll init next time
@@ -86,17 +87,15 @@ static bool check_firmware_version(YK_KEY *yk)
 bool PWYubi::GetSerial(unsigned int &serial) const
 {
   bool retval = false;
-  YK_KEY *ykey = nullptr;
   pthread_mutex_lock(&s_mutex);
   // if yk isn't init'ed, don't bother
   if (m_isInited) {
-    ykey = yk_open_first_key();
-    if (ykey != nullptr) {
-      if (!check_firmware_version(ykey)) {
+    if (m_ykey != nullptr) {
+      if (!check_firmware_version(m_ykey)) {
         m_ykerrstr = _S("YubiKey firmware version unsupported");
         goto done;
       }
-      if (!yk_get_serial(ykey, 0, 0, &serial)) {
+      if (!yk_get_serial(m_ykey, 0, 0, &serial)) {
         m_ykerrstr = _S("Failed to read serial number");
         goto done;
       }
@@ -106,8 +105,6 @@ bool PWYubi::GetSerial(unsigned int &serial) const
     }
   }
   done:
-  if (ykey != nullptr)
-    yk_close_key(ykey);
   pthread_mutex_unlock(&s_mutex);
   return retval;
 }
@@ -115,16 +112,14 @@ bool PWYubi::GetSerial(unsigned int &serial) const
 bool PWYubi::WriteSK(const unsigned char *yubi_sk_bin, size_t sklen)
 {
   bool retval = false;
-  YK_KEY *ykey = nullptr;
   YKP_CONFIG *cfg = ykp_alloc();
   YK_STATUS *st = ykds_alloc();
   pthread_mutex_lock(&s_mutex);
   // if yk isn't init'ed, don't bother
   if (m_isInited) {
-    ykey = yk_open_first_key();
-    if (ykey == nullptr)
+    if (m_ykey == nullptr)
       goto done;
-    if (!yk_get_status(ykey, st) ||
+    if (!yk_get_status(m_ykey, st) ||
         (ykp_configure_version(cfg, st), !ykp_set_tktflag_CHAL_RESP(cfg,true)) ||
         !ykp_set_cfgflag_CHAL_HMAC(cfg, true) ||
         !ykp_set_cfgflag_HMAC_LT64(cfg, true) ||
@@ -154,7 +149,7 @@ bool PWYubi::WriteSK(const unsigned char *yubi_sk_bin, size_t sklen)
     }
 #endif
 
-    if (!yk_write_command(ykey,
+    if (!yk_write_command(m_ykey,
                           ykp_core_config(cfg), ykp_command(cfg),
                           nullptr)) {
           m_ykerrstr = _S("Internal error: couldn't configure key");
@@ -163,8 +158,6 @@ bool PWYubi::WriteSK(const unsigned char *yubi_sk_bin, size_t sklen)
     retval = true;
   } // m_isInited
   done:
-  if (ykey != nullptr)
-    yk_close_key(ykey);
   pthread_mutex_unlock(&s_mutex);
   free(cfg);
   free(st);
@@ -175,39 +168,33 @@ bool PWYubi::RequestHMacSHA1(const unsigned char *challenge, unsigned int len)
 {
   bool retval = false;
   m_reqstat = ERROR;
-  YK_KEY *ykey = nullptr;
   pthread_mutex_lock(&s_mutex);
   // if yk isn't init'ed, don't bother
   if (m_isInited) {
-    ykey = yk_open_first_key();
-    if (ykey == nullptr)
+    if (m_ykey == nullptr)
       goto done;
-  if (yk_write_to_key(ykey, SLOT_CHAL_HMAC2, challenge, len)) {
+  if (yk_write_to_key(m_ykey, SLOT_CHAL_HMAC2, challenge, len)) {
       m_reqstat = PENDING;
       retval = true;
     }
   }
  done:
-  if (ykey != nullptr)
-    yk_close_key(ykey);
   pthread_mutex_unlock(&s_mutex);
   return retval;
 }
 
 PWYubi::RequestStatus PWYubi::GetResponse(unsigned char resp[PWYubi::RESPLEN])
 {
- YK_KEY *ykey = nullptr;
   pthread_mutex_lock(&s_mutex);
   // if yk isn't init'ed, don't bother
   if (m_isInited && m_reqstat == PENDING) {
-    ykey = yk_open_first_key();
-    if (ykey == nullptr) {
+    if (m_ykey == nullptr) {
       m_reqstat = ERROR;
       goto done;
     }
     unsigned char response[64];
     unsigned int response_len = 0;
-    if (yk_read_response_from_key(ykey, 2, YK_FLAG_MAYBLOCK,
+    if (yk_read_response_from_key(m_ykey, 2, YK_FLAG_MAYBLOCK,
                                   response, sizeof(response),
                                   20, &response_len)) {
       memcpy(resp, response, RESPLEN);
@@ -222,8 +209,6 @@ PWYubi::RequestStatus PWYubi::GetResponse(unsigned char resp[PWYubi::RESPLEN])
     }
   }
  done:
-  if (ykey != nullptr)
-    yk_close_key(ykey);
   pthread_mutex_unlock(&s_mutex);
   return m_reqstat;
 }

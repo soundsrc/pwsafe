@@ -11,6 +11,7 @@
 
 #include <pthread.h> // for pthread_mutex_*
 #include <string>
+#include <ykcore.h>
 
 class PWYubi {
 public:
@@ -43,6 +44,7 @@ private:
   static pthread_mutex_t s_mutex;
   mutable std::wstring m_ykerrstr;
   RequestStatus m_reqstat;
+  YK_KEY *m_ykey;
 };
 #endif /* __PWYUBI_H */
 //-----------------------------------------------------------------------------
