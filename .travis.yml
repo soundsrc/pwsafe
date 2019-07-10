@@ -8,21 +8,21 @@ before_install:
 addons:
     apt:
         packages:
-            - "libwxgtk3.0-dev"
+            - libwxgtk3.0-dev
             - libuuid1
-            - "libxerces-c-dev" 
-            - "libxt-dev"
-            - "libxtst-dev"
-            - "libykpers-1-dev"
-            - "libyubikey-dev"
-            - "uuid-dev"
-            - "pkg-config"
-            - "libgtest-dev"
-            - "libqrencode-dev"
+            - libxerces-c-dev
+            - libxt-dev
+            - libxtst-dev
+            - libykpers-1-dev
+            - libyubikey-dev
+            - uuid-dev
+            - pkg-config
+            - libgtest-dev
+            - libqrencode-dev
 
 language: cpp
 
-dist: trusty
+dist: xenial
 
 env:
     - BUILD_DIR=dist UPLOAD_DIR=linux

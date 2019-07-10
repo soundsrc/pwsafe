@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -77,7 +77,7 @@ void PasswordSafeFrame::DoEdit(CItemData item)
     bool read_only = m_core.IsReadOnly() || item.IsProtected();
     AddEditPropSheet editDbox(this, m_core,
                               read_only ? AddEditPropSheet::SheetType::VIEW : AddEditPropSheet::SheetType::EDIT,
-                              &item, this);
+                              &item);
     rc = editDbox.ShowModal();
   } else {
     EditShortcut editDbox(this, m_core, &item);
@@ -114,7 +114,7 @@ void PasswordSafeFrame::OnAddClick( wxCommandEvent& /* evt */ )
     selectedGroup = m_tree->GetItemGroup(selection);
   }
 
-  AddEditPropSheet addDbox(this, m_core, AddEditPropSheet::SheetType::ADD, nullptr, this, selectedGroup);
+  AddEditPropSheet addDbox(this, m_core, AddEditPropSheet::SheetType::ADD, nullptr, selectedGroup);
   if (addDbox.ShowModal() == wxID_OK) {
     const CItemData &item = addDbox.GetItem();
     m_core.Execute(AddEntryCommand::Create(&m_core, item, item.GetBaseUUID()));
@@ -260,6 +260,7 @@ void PasswordSafeFrame::OnFindPrevious( wxCommandEvent& /* evt */ )
 
 void PasswordSafeFrame::OnClearclipboardClick( wxCommandEvent& /* evt */ )
 {
+  UpdateLastClipboardAction(CItemData::FieldType::END);
   PWSclipboard::GetInstance()->ClearCBData();
 }
 
@@ -284,6 +285,7 @@ void PasswordSafeFrame::DoCopyPassword(CItemData &item)
     const StringX &passwd = m_core.GetEntry(m_core.Find(base)).GetPassword();
     PWSclipboard::GetInstance()->SetData(passwd);
   }
+  UpdateLastClipboardAction(CItemData::FieldType::PASSWORD);
   UpdateAccessTime(item);
 }
 
@@ -302,6 +304,7 @@ void PasswordSafeFrame::OnCopyRunCmd(wxCommandEvent& evt)
 void PasswordSafeFrame::DoCopyRunCmd(CItemData &item)
 {
   PWSclipboard::GetInstance()->SetData(item.GetRunCommand());
+  UpdateLastClipboardAction(CItemData::FieldType::RUNCMD);
   UpdateAccessTime(item);
 }
 
@@ -320,6 +323,7 @@ void PasswordSafeFrame::OnCopyusernameClick(wxCommandEvent& evt)
 void PasswordSafeFrame::DoCopyUsername(CItemData &item)
 {
   PWSclipboard::GetInstance()->SetData(item.GetUser());
+  UpdateLastClipboardAction(CItemData::FieldType::USER);
   UpdateAccessTime(item);
 }
 
@@ -338,6 +342,7 @@ void PasswordSafeFrame::OnCopynotesfldClick(wxCommandEvent& evt)
 void PasswordSafeFrame::DoCopyNotes(CItemData &item)
 {
   PWSclipboard::GetInstance()->SetData(item.GetNotes());
+  UpdateLastClipboardAction(CItemData::FieldType::NOTES);
   UpdateAccessTime(item);
 }
 
@@ -467,6 +472,7 @@ void PasswordSafeFrame::OnDuplicateEntry(wxCommandEvent& WXUNUSED(event))
 void PasswordSafeFrame::DoCopyURL(CItemData &item)
 {
   PWSclipboard::GetInstance()->SetData(item.GetURL());
+  UpdateLastClipboardAction(CItemData::FieldType::URL);
   UpdateAccessTime(item);
 }
 
@@ -478,6 +484,7 @@ void PasswordSafeFrame::DoCopyEmail(CItemData &item)
 
   if (!mailto.empty()) {
     PWSclipboard::GetInstance()->SetData(mailto);
+    UpdateLastClipboardAction(CItemData::FieldType::EMAIL);
     UpdateAccessTime(item);
   }
 }
@@ -728,10 +735,14 @@ void PasswordSafeFrame::DoBrowse(CItemData &item, bool bAutotype)
     StringX sxautotype = PWSAuxParse::GetAutoTypeString(*pci, m_core,
                                                         vactionverboffsets);
     LaunchBrowser(cs_command, sxautotype, vactionverboffsets, bAutotype);
-#ifdef NOT_YET
-    SetClipboardData(sx_pswd);
-    UpdateLastClipboardAction(CItemData::PASSWORD);
-#endif
+
+    if (PWSprefs::GetInstance()->GetPref(PWSprefs::CopyPasswordWhenBrowseToURL)) {
+      PWSclipboard::GetInstance()->SetData(sx_pswd);
+      UpdateLastClipboardAction(CItemData::FieldType::PASSWORD);
+    }
+
+    // TODO: Minimize depending on PWSprefs::MinimizeOnAutotype
+
     UpdateAccessTime(item);
   }
 }
@@ -819,10 +830,88 @@ bool PasswordSafeFrame::LaunchBrowser(const wxString &csURL, const StringX &/*sx
 
 void PasswordSafeFrame::DoRun(CItemData& item)
 {
-  const StringX runee = item.GetRunCommand();
+  const StringX runee   = item.GetRunCommand();
+  const CItemData *pci  = &item;
+  const CItemData *pbci = pci->IsDependent() ? m_core.GetBaseEntry(pci) : nullptr;
+
+  StringX group, title, user, password, lastpassword, notes, url, email, autotype, runcommand;
+
+  if (!PWSAuxParse::GetEffectiveValues(pci, pbci, 
+                                       group, title, 
+                                       user, password, lastpassword, 
+                                       notes, url, email, 
+                                       autotype, runcommand)) {
+    return;
+  }
+
+  if (runcommand.empty()) {
+    return;
+  }
+
+  stringT errorMessage;
+  StringX::size_type columnPosition;
+  bool isSpecialUrl, doAutoType;
+  StringX expandedAutoType;
+
+  StringX expandedES(PWSAuxParse::GetExpandedString(runcommand,
+                                                    m_core.GetCurFile(), pci, pbci,
+                                                    doAutoType, expandedAutoType,
+                                                    errorMessage, columnPosition, isSpecialUrl));
+
+  if (!errorMessage.empty()) {
+    wxMessageBox(
+      wxString::Format(_("Error at column %d:\n\n%s"), (int)columnPosition, errorMessage.c_str()), 
+      _("Error parsing Run Command"), 
+      wxOK|wxICON_ERROR, this);
+
+    return;
+  }
+
+  pws_os::CUUID uuid = pci->GetUUID();
+
+  std::vector<size_t> vactionverboffsets;
+
+  // if no autotype value in run command's $a(value), start with item's (bug #1078)
+  if (expandedAutoType.empty()) {
+    expandedAutoType = pci->GetAutoType();
+  }
+
+  expandedAutoType = PWSAuxParse::GetAutoTypeString(expandedAutoType,
+                                                    group, title, user,
+                                                    password, lastpassword,
+                                                    notes, url, email,
+                                                    vactionverboffsets);
+
+  // Now honour presence of [alt], {alt} or [ssh] in the url if present
+  // in the RunCommand field.  Note: they are all treated the same (unlike
+  // in 'Browse to'.
+  StringX altBrowser(PWSprefs::GetInstance()->GetPref(PWSprefs::AltBrowser));
+
+  if (isSpecialUrl && !altBrowser.empty()) {
+    StringX cmdLineParams(PWSprefs::GetInstance()->GetPref(PWSprefs::AltBrowserCmdLineParms));
+
+    if (altBrowser[0] != L'\'' && altBrowser[0] != L'"') {
+      altBrowser = L"\"" + altBrowser + L"\"";
+    }
+    if (!cmdLineParams.empty()) {
+      expandedES = altBrowser + StringX(L" ") + cmdLineParams + StringX(L" ") + expandedES;
+    }
+    else {
+      expandedES = altBrowser + StringX(L" ") + expandedES;
+    }
+  }
+
+  // FR856 - Copy Password to Clipboard on Run-Command When copy-on-browse set.
+  if (PWSprefs::GetInstance()->GetPref(PWSprefs::CopyPasswordWhenBrowseToURL)) {
+    PWSclipboard::GetInstance()->SetData(password);
+    UpdateLastClipboardAction(CItemData::FieldType::PASSWORD);
+  }
+
   PWSRun runner;
-  if (runner.runcmd(runee, false))
+
+  if (runner.runcmd(expandedES, !expandedAutoType.empty())) {
     UpdateAccessTime(item);
+  }
 }
 
 void PasswordSafeFrame::DoEmail(CItemData& item )

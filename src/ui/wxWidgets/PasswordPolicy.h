@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -77,12 +77,12 @@ class wxSpinCtrl;
  */
 
 class CPasswordPolicy: public wxDialog
-{    
+{
   DECLARE_EVENT_TABLE()
 
 public:
   enum class DialogType { EDITOR, GENERATOR };
-  
+
   /// Constructors
   CPasswordPolicy( wxWindow* parent, PWScore &core,
                    const PSWDPolicyMap &polmap,
@@ -236,8 +236,8 @@ private:
   wxCheckBox* m_pwpHexCtrl;
 
   /* Additional controls for DialogType GENERATOR */
-  wxCheckBox* m_pwpUseNamedPolicyCtrl;
-  wxComboBox* m_pwpPoliciesSelectionCtrl;
+  wxCheckBox* m_UseDatabasePolicyCtrl;
+  wxComboBox* m_PoliciesSelectionCtrl;
   wxTextCtrl* m_passwordCtrl;
   wxArrayString m_Policynames;
   wxStaticBoxSizer* m_itemStaticBoxSizer6;
@@ -282,5 +282,4 @@ private:
   PWPolicy m_st_pp; // The edited policy
 };
 
-#endif
-  // _PASSWORDPOLICY_H_
+#endif  // _PASSWORDPOLICY_H_

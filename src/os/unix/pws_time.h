@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -13,8 +13,11 @@
 #ifdef __FreeBSD__
 #include <time.h>
 #endif
+
 typedef time_t __time32_t;
+#ifndef __time64_t 
 typedef uint64_t __time64_t;
+#endif
 
 extern int localtime64_r(const __time64_t *timep, struct tm *result);
 

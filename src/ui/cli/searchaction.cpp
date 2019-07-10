@@ -1,12 +1,13 @@
 /*
  * Created by Saurav Ghosh on 19/06/16.
- * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
  * http://www.opensource.org/licenses/artistic-license-2.0.php
  */
 
+#include "stdafx.h"
 #include <string>
 
 #include "./searchaction.h"
@@ -139,7 +140,6 @@ int ChangePasswordOfSearchResults(const ItemPtrVec &items, PWScore &core)
   return PWScore::SUCCESS;
 }
 
-constexpr wchar_t SearchActionTraits<UserArgs::Delete>::prompt[];
-constexpr wchar_t SearchActionTraits<UserArgs::Update>::prompt[];
-constexpr wchar_t SearchActionTraits<UserArgs::ClearFields>::prompt[];
-constexpr wchar_t SearchActionTraits<UserArgs::ChangePassword>::prompt[];
+constexpr wchar_t *SearchActionTraits<UserArgs::Delete>::prompt;
+constexpr wchar_t *SearchActionTraits<UserArgs::Update>::prompt;
+constexpr wchar_t *SearchActionTraits<UserArgs::ClearFields>::prompt;

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -120,8 +120,8 @@ BOOL COptionsPasswordHistory::OnInitDialog()
 
   pspin = (CSpinButtonCtrl *)GetDlgItem(IDC_DEDSPIN);
   pspin->SetBuddy(GetDlgItem(IDC_DEFEXPIRYDAYS));
-  pspin->SetRange(PWSprefs::GetInstance()->GetPrefMinVal(PWSprefs::DefaultExpiryDays),
-                  PWSprefs::GetInstance()->GetPrefMaxVal(PWSprefs::DefaultExpiryDays));
+  pspin->SetRange(static_cast<short>(PWSprefs::GetInstance()->GetPrefMinVal(PWSprefs::DefaultExpiryDays)),
+                  static_cast<short>(PWSprefs::GetInstance()->GetPrefMaxVal(PWSprefs::DefaultExpiryDays)));
   pspin->SetBase(10);
   pspin->SetPos(m_PWHDefExpDays);
 

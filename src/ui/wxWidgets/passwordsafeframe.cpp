@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -88,7 +88,6 @@ using std::make_tuple;
 
 IMPLEMENT_CLASS( PasswordSafeFrame, wxFrame )
 
-DEFINE_EVENT_TYPE(wxEVT_DB_PREFS_CHANGE)
 DEFINE_EVENT_TYPE(wxEVT_GUI_DB_PREFS_CHANGE)
 
 /*!
@@ -105,6 +104,7 @@ BEGIN_EVENT_TABLE( PasswordSafeFrame, wxFrame )
   EVT_MENU( wxID_OPEN,                  PasswordSafeFrame::OnOpenClick                   )
   EVT_MENU( wxID_CLOSE,                 PasswordSafeFrame::OnCloseClick                  )
   EVT_MENU( ID_LOCK_SAFE,               PasswordSafeFrame::OnLockSafe                    )
+  EVT_MENU( ID_UNLOCK_SAFE,             PasswordSafeFrame::OnUnlockSafe                  )
   EVT_MENU( wxID_SAVE,                  PasswordSafeFrame::OnSaveClick                   )
   EVT_MENU( wxID_SAVEAS,                PasswordSafeFrame::OnSaveAsClick                 )
   EVT_MENU( wxID_PROPERTIES,            PasswordSafeFrame::OnPropertiesClick             )
@@ -202,6 +202,7 @@ BEGIN_EVENT_TABLE( PasswordSafeFrame, wxFrame )
   EVT_UPDATE_UI( wxID_SAVEAS,           PasswordSafeFrame::OnUpdateUI                    )
   EVT_UPDATE_UI( wxID_CLOSE,            PasswordSafeFrame::OnUpdateUI                    )
   EVT_UPDATE_UI( ID_LOCK_SAFE,          PasswordSafeFrame::OnUpdateUI                    )
+  EVT_UPDATE_UI( ID_UNLOCK_SAFE,        PasswordSafeFrame::OnUpdateUI                    )
   EVT_UPDATE_UI( ID_ADDGROUP,           PasswordSafeFrame::OnUpdateUI                    )
   EVT_UPDATE_UI( ID_RENAME,             PasswordSafeFrame::OnUpdateUI                    )
   EVT_UPDATE_UI( ID_LIST_VIEW,          PasswordSafeFrame::OnUpdateUI                    )
@@ -267,7 +268,8 @@ PasswordSafeFrame::PasswordSafeFrame(PWScore &core)
 : m_core(core), m_currentView(ViewType::GRID), m_search(0), m_sysTray(new SystemTray(this)),
   m_exitFromMenu(false), m_bRestoredDBUnsaved(false),
   m_RUEList(core), m_guiInfo(new GUIInfo), m_bTSUpdated(false), m_savedDBPrefs(wxEmptyString),
-  m_bShowExpiry(false), m_bShowUnsaved(false), m_bFilterActive(false)
+  m_bShowExpiry(false), m_bShowUnsaved(false), m_bFilterActive(false), m_InitialTreeDisplayStatusAtOpen(true),
+  m_LastClipboardAction(wxEmptyString), m_LastAction(CItem::FieldType::START)
 {
     Init();
 }
@@ -279,7 +281,8 @@ PasswordSafeFrame::PasswordSafeFrame(wxWindow* parent, PWScore &core,
   : m_core(core), m_currentView(ViewType::GRID), m_search(0), m_sysTray(new SystemTray(this)),
     m_exitFromMenu(false), m_bRestoredDBUnsaved(false),
     m_RUEList(core), m_guiInfo(new GUIInfo), m_bTSUpdated(false), m_savedDBPrefs(wxEmptyString),
-    m_bShowExpiry(false), m_bShowUnsaved(false), m_bFilterActive(false), m_InitialTreeDisplayStatusAtOpen(true)
+    m_bShowExpiry(false), m_bShowUnsaved(false), m_bFilterActive(false), m_InitialTreeDisplayStatusAtOpen(true),
+    m_LastClipboardAction(wxEmptyString), m_LastAction(CItem::FieldType::START)
 {
     Init();
     m_currentView = (PWSprefs::GetInstance()->GetPref(PWSprefs::LastView) == _T("list")) ? ViewType::GRID : ViewType::TREE;
@@ -352,6 +355,7 @@ PasswordSafeFrame::~PasswordSafeFrame()
   m_guiInfo = 0;
 
   m_core.ClearDBData();
+  m_core.UnregisterObserver(this);
 }
 
 /*!
@@ -360,12 +364,7 @@ PasswordSafeFrame::~PasswordSafeFrame()
 
 void PasswordSafeFrame::Init()
 {
-  std::bitset<UIInterFace::NUM_SUPPORTED> bsSupportedFunctions;
-  bsSupportedFunctions.set(UIInterFace::DATABASEMODIFIED);
-  bsSupportedFunctions.set(UIInterFace::UPDATEGUI);
-  bsSupportedFunctions.set(UIInterFace::GUIREFRESHENTRY);
-
-  m_core.SetUIInterFace(this, UIInterFace::NUM_SUPPORTED, bsSupportedFunctions);
+  m_core.RegisterObserver(this);
 
   m_RUEList.SetMax(PWSprefs::GetInstance()->PWSprefs::MaxREItems);
 ////@begin PasswordSafeFrame member initialisation
@@ -440,8 +439,33 @@ void PasswordSafeFrame::CreateMenubar()
   itemMenu3->Append(wxID_NEW, _("&New..."), wxEmptyString, wxITEM_NORMAL);
   itemMenu3->Append(wxID_OPEN, _("&Open..."), wxEmptyString, wxITEM_NORMAL);
   itemMenu3->Append(wxID_CLOSE, _("&Close"), wxEmptyString, wxITEM_NORMAL);
-  itemMenu3->Append(ID_LOCK_SAFE, _("&Lock Safe"), wxEmptyString, wxITEM_NORMAL);
-  itemMenu3->AppendSeparator();
+
+  // Added for window managers which have no iconization concept
+  if (m_sysTray->GetTrayStatus() == SystemTray::TrayStatus::LOCKED) {
+    itemMenu3->Append(ID_UNLOCK_SAFE, _("&Unlock Safe\tCtrl+I"), wxEmptyString, wxITEM_NORMAL);
+  }
+  else {
+    itemMenu3->Append(ID_LOCK_SAFE, _("&Lock Safe\tCtrl+J"), wxEmptyString, wxITEM_NORMAL);
+  }
+
+  if (wxGetApp().recentDatabases().GetCount() > 0) {
+
+    // Most recently used DBs listed directly on File menu
+    if (PWSprefs::GetInstance()->GetPref(PWSprefs::MRUOnFileMenu)) {
+      wxGetApp().recentDatabases().AddFilesToMenu(itemMenu3);
+    }
+    // Most recently used DBs listed as submenu of File menu
+    else {
+      wxMenu* recentSafesMenu = new wxMenu;
+      wxGetApp().recentDatabases().AddFilesToMenu(recentSafesMenu);
+      itemMenu3->AppendSeparator();
+      itemMenu3->Append(ID_RECENTSAFES, _("&Recent Safes..."), recentSafesMenu);
+    }
+  }
+  else {
+    itemMenu3->AppendSeparator();
+  }
+
   itemMenu3->Append(ID_MENU_CLEAR_MRU, _("Clear Recent Safe List"), wxEmptyString, wxITEM_NORMAL);
   itemMenu3->AppendSeparator();
   itemMenu3->Append(wxID_SAVE, _("&Save..."), wxEmptyString, wxITEM_NORMAL);
@@ -589,6 +613,7 @@ void PasswordSafeFrame::CreateControls()
   m_tree = new PWSTreeCtrl( this, m_core, ID_TREECTRL, wxDefaultPosition,
                             wxDefaultSize,
                             wxTR_EDIT_LABELS|wxTR_HAS_BUTTONS |wxTR_HIDE_ROOT|wxTR_SINGLE );
+
   // let the tree ctrl handle ID_ADDGROUP & ID_RENAME all by itself
   Connect(ID_ADDGROUP, wxEVT_COMMAND_MENU_SELECTED,
                        wxCommandEventHandler(PWSTreeCtrl::OnAddGroup), nullptr, m_tree);
@@ -865,9 +890,15 @@ void PasswordSafeFrame::ShowGrid(bool show)
     m_grid->UpdateSorting();
 
     m_guiInfo->RestoreGridViewInfo(m_grid);
+
+    // Register view at core as new observer for notifications
+    m_core.RegisterObserver(m_grid);
   }
   else {
     m_guiInfo->SaveGridViewInfo(m_grid);
+
+    // Unregister the active view at core to not get notifications anymore
+    m_core.UnregisterObserver(m_grid);
   }
 
   m_grid->Show(show);
@@ -921,9 +952,15 @@ void PasswordSafeFrame::ShowTree(bool show)
     else {
       m_guiInfo->RestoreTreeViewInfo(m_tree);
     }
+
+    // Register view at core as new observer for notifications
+    m_core.RegisterObserver(m_tree);
   }
   else {
     m_guiInfo->SaveTreeViewInfo(m_tree);
+
+    // Unregister the active view at core to not get notifications anymore
+    m_core.UnregisterObserver(m_tree);
   }
 
   m_tree->Show(show);
@@ -1169,8 +1206,10 @@ void PasswordSafeFrame::OnOpenClick( wxCommandEvent& /* evt */ )
 {
   int rc = DoOpen(_("Please Choose a Database to Open:"));
 
-  if (rc == PWScore::SUCCESS)
+  if (rc == PWScore::SUCCESS) {
     m_core.ResumeOnDBNotification();
+    CreateMenubar(); // Recreate the menu with updated list of most recently used DBs
+  }
 }
 
 /*!
@@ -2124,7 +2163,11 @@ void PasswordSafeFrame::OnUpdateUI(wxUpdateUIEvent& evt)
 
     case ID_PWDPOLSM:
     case ID_LOCK_SAFE:
-      evt.Enable(m_sysTray->GetTrayStatus() == SystemTray::TrayStatus::UNLOCKED);
+      evt.Enable(m_core.IsDbOpen() && !m_sysTray->IsLocked());
+      break;
+
+    case ID_UNLOCK_SAFE:
+      evt.Enable(m_core.IsDbOpen() && m_sysTray->IsLocked());
       break;
 
     case ID_FILTERMENU:
@@ -2133,7 +2176,7 @@ void PasswordSafeFrame::OnUpdateUI(wxUpdateUIEvent& evt)
       break;
 
     default:
-        break;
+      break;
   }
 }
 
@@ -2141,46 +2184,6 @@ bool PasswordSafeFrame::IsClosed() const
 {
   return (!m_core.IsDbOpen() && m_core.GetNumEntries() == 0 &&
           !m_core.HasDBChanged() && !m_core.AnyToUndo() && !m_core.AnyToRedo());
-}
-
-// Implementation of UIinterface methods
-
-void PasswordSafeFrame::DatabaseModified(bool modified)
-{
-  if (!modified)
-    return;
-
-  if (m_core.HaveDBPrefsChanged()) {
-    wxCommandEvent evt(wxEVT_DB_PREFS_CHANGE, wxID_ANY);
-    evt.ResumePropagation(wxEVENT_PROPAGATE_MAX); //let it propagate through the entire window tree
-    if (m_tree) {
-      m_tree->GetEventHandler()->AddPendingEvent(evt);
-      evt.StopPropagation(); //or else it will come to the frame twice
-    }
-    if (m_grid) m_grid->GetEventHandler()->AddPendingEvent(evt);
-  }
-  else if (m_core.HasDBChanged()) {  //"else if" => both DB and it's prefs can't change at the same time
-    if (m_search) m_search->Invalidate();
-    if (IsTreeView()) {
-      if (m_grid != nullptr)
-        m_grid->OnPasswordListModified();
-    }
-    else {
-#if 0
-    if (m_tree != nullptr)
-      m_tree->???
-#endif
-    }
-  } else {
-    wxFAIL_MSG(wxT("What changed in the DB if not entries or preferences?"));
-  }
-
-  // Save Immediately if user requested it
-  if (PWSprefs::GetInstance()->GetPref(PWSprefs::SaveImmediately)) {
-    int rc = SaveImmediately();
-    if (rc == PWScore::SUCCESS)
-      modified = false;
-  }
 }
 
 void PasswordSafeFrame::RebuildGUI(const int iView /*= iBothViews*/)
@@ -2212,9 +2215,36 @@ void PasswordSafeFrame::RefreshViews()
   UpdateStatusBar();
 }
 
-void PasswordSafeFrame::UpdateGUI(UpdateGUICommand::GUI_Action ga,
-                                  const CUUID &entry_uuid,
-                                  CItemData::FieldType ft)
+
+/**
+ * Implements Observer::DatabaseModified(bool)
+ */
+void PasswordSafeFrame::DatabaseModified(bool modified)
+{
+  if (!modified)
+    return;
+
+  if (m_core.HaveDBPrefsChanged()) {
+    // TODO: Anything that needs to be handled here?
+  }
+  else if (m_core.HasDBChanged()) {  //"else if" => both DB and it's prefs can't change at the same time
+    // TODO: Anything that needs to be handled here?
+  } else {
+    wxFAIL_MSG(wxT("What changed in the DB if not entries or preferences?"));
+  }
+
+  // Save Immediately if user requested it
+  if (PWSprefs::GetInstance()->GetPref(PWSprefs::SaveImmediately)) {
+    int rc = SaveImmediately();
+    if (rc == PWScore::SUCCESS)
+      modified = false;
+  }
+}
+
+/**
+ * Implements Observer::UpdateGUI(UpdateGUICommand::GUI_Action, const pws_os::CUUID&, CItemData::FieldType)
+ */
+void PasswordSafeFrame::UpdateGUI(UpdateGUICommand::GUI_Action ga, const CUUID &entry_uuid, CItemData::FieldType WXUNUSED(ft))
 {
   // Callback from PWScore if GUI needs updating
   // Note: For some values of 'ga', 'ci' & ft are invalid and not used.
@@ -2224,7 +2254,6 @@ void PasswordSafeFrame::UpdateGUI(UpdateGUICommand::GUI_Action ga,
   // the GUI should not be updated until after the Add.
 
   // TODO: bUpdateGUI processing in PasswordSafeFrame::UpdateGUI
-  UNREFERENCED_PARAMETER(ft);
 
   CItemData *pci(nullptr);
 
@@ -2234,8 +2263,7 @@ void PasswordSafeFrame::UpdateGUI(UpdateGUICommand::GUI_Action ga,
   } else if (ga == UpdateGUICommand::GUI_ADD_ENTRY ||
              ga == UpdateGUICommand::GUI_REFRESH_ENTRYFIELD ||
              ga == UpdateGUICommand::GUI_REFRESH_ENTRYPASSWORD) {
-    pws_os::Trace(wxT("Couldn't find uuid %ls"),
-                  StringX(CUUID(entry_uuid)).c_str());
+    pws_os::Trace(wxT("Couldn't find uuid %ls"), StringX(CUUID(entry_uuid)).c_str());
     return;
   }
 
@@ -2244,13 +2272,10 @@ void PasswordSafeFrame::UpdateGUI(UpdateGUICommand::GUI_Action ga,
 #endif
   switch (ga) {
     case UpdateGUICommand::GUI_ADD_ENTRY:
-      ASSERT(pci != nullptr);
-      m_tree->AddItem(*pci);
-      m_grid->AddItem(*pci);
+      // Handled by individual views.
       break;
     case UpdateGUICommand::GUI_DELETE_ENTRY:
-      m_grid->Remove(entry_uuid);
-      m_tree->Remove(entry_uuid);
+      // Handled by individual views.
       break;
     case UpdateGUICommand::GUI_REFRESH_TREE:
       // Caused by Database preference changed about showing username and/or
@@ -2266,83 +2291,27 @@ void PasswordSafeFrame::UpdateGUI(UpdateGUICommand::GUI_Action ga,
       // the action is complete - when these calls are then sent
       RebuildGUI();
       break;
-#ifdef NOTYET
     case UpdateGUICommand::GUI_UPDATE_STATUSBAR:
-      UpdateToolBarDoUndo();
+      // TODO: UpdateToolBarDoUndo();
       UpdateStatusBar();
       break;
-#endif
     case UpdateGUICommand::GUI_REFRESH_ENTRYFIELD:
-      ASSERT(pci != nullptr);
-      RefreshEntryFieldInGUI(*pci, ft);
+      // Handled by individual views.
       break;
     case UpdateGUICommand::GUI_REFRESH_ENTRYPASSWORD:
-      ASSERT(pci != nullptr);
-      RefreshEntryPasswordInGUI(*pci);
+      // Handled by individual views.
       break;
     case UpdateGUICommand::GUI_DB_PREFERENCES_CHANGED:
     {
       wxCommandEvent evt(wxEVT_GUI_DB_PREFS_CHANGE, wxID_ANY);
       evt.ResumePropagation(wxEVENT_PROPAGATE_MAX); //let it propagate through the entire window tree
-      if (m_tree) {
-        m_tree->GetEventHandler()->AddPendingEvent(evt);
-        evt.StopPropagation(); //or else it will come to the frame twice
-      }
-      if (m_grid) m_grid->GetEventHandler()->AddPendingEvent(evt);
+      GetEventHandler()->ProcessEvent(evt);
+      RefreshViews();
       break;
     }
     default:
       break;
   }
-}
-
-void PasswordSafeFrame::UpdateGUI(UpdateGUICommand::GUI_Action /*ga*/,
-                                  const std::vector<StringX> &/*vGroups*/)
-{
-  // TODO
-  return;
-}
-void PasswordSafeFrame::RefreshEntryFieldInGUI(const CItemData& item, CItemData::FieldType ft)
-{
-  if (m_currentView == ViewType::GRID) {
-    m_grid->RefreshItemField(item.GetUUID(), ft);
-  }
-  else {
-    //even though the sort order might have changed, don't change the position yet
-    //as it could be too distracting, and the item may even move off the screen
-    m_tree->UpdateItemField(item, ft);
-  }
-}
-
-void PasswordSafeFrame::RefreshEntryPasswordInGUI(const CItemData& item)
-{
-  if (m_currentView == ViewType::GRID) {
-    RefreshEntryFieldInGUI(item, CItemData::PASSWORD);
-    //TODO: Update password history
-  }
-  else {
-    RefreshEntryFieldInGUI(item, CItemData::PASSWORD);
-  }
-}
-
-void PasswordSafeFrame::GUIRefreshEntry(const CItemData& item, bool bAllowFail)
-{
-  UNREFERENCED_PARAMETER(bAllowFail);
-
-  if (item.GetStatus() ==CItemData::ES_DELETED) {
-    uuid_array_t uuid;
-    item.GetUUID(uuid);
-    if (IsTreeView()) { m_tree->Remove(uuid); }
-    else { m_grid->Remove(uuid); }
-  } else {
-    if (IsTreeView()) { m_tree->UpdateItem(item); }
-    else { m_grid->UpdateItem(item); }
-  }
-}
-
-void PasswordSafeFrame::UpdateWizard(const stringT &)
-{
-  // Stub
 }
 
 /*!
@@ -2362,6 +2331,7 @@ void PasswordSafeFrame::OnClearRecentHistory(wxCommandEvent& evt)
 {
   UNREFERENCED_PARAMETER(evt);
   wxGetApp().recentDatabases().Clear();
+  CreateMenubar(); // Recreate the menu with cleared list of most recently used DBs
 }
 
 void PasswordSafeFrame::OnUpdateClearRecentDBHistory(wxUpdateUIEvent& evt)
@@ -2624,6 +2594,8 @@ void PasswordSafeFrame::UnlockSafe(bool restoreUI, bool iconizeOnFailure)
     Show(true);
     m_guiInfo->Restore(this);
   }
+
+  CreateMenubar(); // Recreate menubar to replace menu item 'Unlock Safe' by 'Lock Safe'
 }
 
 void PasswordSafeFrame::SetFocus()
@@ -2726,6 +2698,11 @@ void PasswordSafeFrame::OnLockSafe(wxCommandEvent&)
   IconizeOrHideAndLock();
 }
 
+void PasswordSafeFrame::OnUnlockSafe(wxCommandEvent&)
+{
+  UnlockSafe(true, true);
+}
+
 void PasswordSafeFrame::IconizeOrHideAndLock()
 {
   if (PWSprefs::GetInstance()->GetPref(PWSprefs::UseSystemTray)) {
@@ -2754,7 +2731,7 @@ void PasswordSafeFrame::LockDb()
   if (SaveAndClearDatabaseOnLock()) {
     m_sysTray->SetTrayStatus(SystemTray::TrayStatus::LOCKED);
 
-    UpdateMenuBar();
+    CreateMenubar(); // Recreate menubar to replace menu item 'Lock Safe' by 'Unlock Safe'
   }
 }
 
@@ -2783,20 +2760,25 @@ void PasswordSafeFrame::OnOpenRecentDB(wxCommandEvent& evt)
   {
     case PWScore::SUCCESS:
       m_core.ResumeOnDBNotification();
+      CreateMenubar();  // Recreate the menu with updated list of most recently used DBs
       break;
+
+    case PWScore::ALREADY_OPEN:
+      break;            // An already open DB doesn't need to be removed from history
 
     case PWScore::USER_CANCEL:
       //In case the file doesn't exist, user will have to cancel
       //the safe combination entry box.  In that call, fall through
       //to the default case of removing the file from history
       if (pws_os::FileExists(stringT(dbfile)))
-        break;  //file exists.  don't remove it from history
+        break;          // An existing file doesn't need to be removed from history
 
       //fall through
     default:
       wxMessageBox(wxString(_("There was an error loading the database: ")) << dbfile,
                      _("Could not load database"), wxOK|wxICON_ERROR, this);
       db.RemoveFileFromHistory(index);
+      CreateMenubar();  // Update menu so that not existing file doesn't appear on File menu anymore
       break;
   }
 }
@@ -3523,32 +3505,85 @@ void PasswordSafeFrame::UpdateStatusBar()
     wxString text;
     // SB_DBLCLICK pane is set per selected entry, not here
 
-    //    m_statusBar->SetStatusText(m_lastclipboardaction, CPWStatusBar::SB_CLIPBOARDACTION);
+    m_statusBar->SetStatusText(m_LastClipboardAction, CPWStatusBar::Field::CLIPBOARDACTION);
 
-    text = m_core.HasDBChanged() ? wxT("*") : wxT(" ");
-    m_statusBar->SetStatusText(text, CPWStatusBar::SB_MODIFIED);
+    text  = m_core.HasDBChanged()       ? wxT("*") : wxT(" ");
+    text += m_core.HaveDBPrefsChanged() ? wxT("°") : wxT(" ");
+    m_statusBar->SetStatusText(text, CPWStatusBar::Field::MODIFIED);
 
     text = m_core.IsReadOnly() ? wxT("R-O") : wxT("R/W");
-    m_statusBar->SetStatusText(text, CPWStatusBar::SB_READONLY);
+    m_statusBar->SetStatusText(text, CPWStatusBar::Field::READONLY);
 
     text.Clear(); text <<  m_core.GetNumEntries();
-    m_statusBar->SetStatusText(text, CPWStatusBar::SB_NUM_ENT);
+    m_statusBar->SetStatusText(text, CPWStatusBar::Field::NUM_ENT);
 
     text = m_bFilterActive ? wxT("[F]") : wxT("   ");
-    m_statusBar->SetStatusText(text, CPWStatusBar::SB_FILTER);
-  } else { // no open file
-    m_statusBar->SetStatusText(_(PWSprefs::GetDCAdescription(-1)), CPWStatusBar::SB_DBLCLICK);
-    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::SB_CLIPBOARDACTION);
-    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::SB_MODIFIED);
-    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::SB_READONLY);
-    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::SB_NUM_ENT);
-    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::SB_FILTER);
+    m_statusBar->SetStatusText(text, CPWStatusBar::Field::FILTER);
+  }
+  else { // no open file
+    m_statusBar->SetStatusText(_(PWSprefs::GetDCAdescription(-1)), CPWStatusBar::Field::DOUBLECLICK);
+    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::Field::CLIPBOARDACTION);
+    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::Field::MODIFIED);
+    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::Field::READONLY);
+    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::Field::NUM_ENT);
+    m_statusBar->SetStatusText(wxEmptyString, CPWStatusBar::Field::FILTER);
   }
 }
 
 void PasswordSafeFrame::UpdateMenuBar()
 {
   // Add code here for more complex update logic on menu items, otherwise use OnUpdateUI
+}
+
+void PasswordSafeFrame::UpdateLastClipboardAction(const CItemData::FieldType field)
+{
+  // Note use of CItemData::RESERVED for indicating in the
+  // Status bar that an old password has been copied
+  m_LastClipboardAction = wxEmptyString;
+  switch (field) {
+    case CItemData::FieldType::GROUP:
+      m_LastClipboardAction = _("Group copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::TITLE:
+      m_LastClipboardAction = _("Title copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::USER:
+      m_LastClipboardAction = _("User copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::PASSWORD:
+      m_LastClipboardAction = _("Pswd copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::NOTES:
+      m_LastClipboardAction = _("Notes copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::URL:
+      m_LastClipboardAction = _("URL copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::AUTOTYPE:
+      m_LastClipboardAction = _("Autotype copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::RUNCMD:
+      m_LastClipboardAction = _("RunCmd copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::EMAIL:
+      m_LastClipboardAction = _("Email copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::PWHIST:
+      m_LastClipboardAction = _("Password History copied " ) + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::RESERVED:
+      m_LastClipboardAction = _("Old Pswd copied ") + wxDateTime::Now().FormatTime();
+      break;
+    case CItemData::FieldType::END:
+      m_LastClipboardAction = wxEmptyString;
+      break;
+    default:
+      ASSERT(0);
+      return;
+  }
+
+  m_LastAction = field;
+  UpdateStatusBar();
 }
 
 void PasswordSafeFrame::UpdateSelChanged(const CItemData *pci)
@@ -3560,7 +3595,7 @@ void PasswordSafeFrame::UpdateSelChanged(const CItemData *pci)
     if (dca == -1)
       dca = PWSprefs::GetInstance()->GetPref(PWSprefs::DoubleClickAction);
   }
-  m_statusBar->SetStatusText(_(PWSprefs::GetDCAdescription(dca)), CPWStatusBar::SB_DBLCLICK);
+  m_statusBar->SetStatusText(_(PWSprefs::GetDCAdescription(dca)), CPWStatusBar::Field::DOUBLECLICK);
 }
 
 //-----------------------------------------------------------------

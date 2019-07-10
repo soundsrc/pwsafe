@@ -1,12 +1,13 @@
 /*
  * Created by Saurav Ghosh
- * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
  * http://www.opensource.org/licenses/artistic-license-2.0.php
  */
 
+#include "stdafx.h"
 #include "./diff.h"
 #include "./argutils.h"
 #include "./safeutils.h"
@@ -19,6 +20,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <functional>
+#include <cassert>
 
 using namespace std;
 
@@ -494,7 +496,7 @@ int Diff(PWScore &core, const UserArgs &ua)
   }
   safeFields.reset(CItem::RMTIME);
 
-  int status = OpenCore(otherCore, otherSafe);
+  int status = OpenCore(otherCore, otherSafe, ua.passphrase[1]);
   if ( status == PWScore::SUCCESS ) {
     constexpr bool treatWhitespacesAsEmpty = false;
     core.Compare( &otherCore,

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -1016,6 +1016,9 @@ bool ThisMfcApp::ParseCommandLine(DboxMain &dbox, bool &allDone)
     // If start silent && no filename specified, start closed as well
     if (startSilent && !fileGiven)
       dbox.SetStartNoDB();
+    // start silent implies system tray:
+    if (startSilent)
+      PWSprefs::GetInstance()->SetPref(PWSprefs::UseSystemTray, true);
   } // Command line not empty
 
   if (!allDone) {
@@ -1090,15 +1093,6 @@ BOOL ThisMfcApp::InitInstance()
   // Do not create dbox before config data obtained as it would create PWSprefs
   // using the potentially incorrect config data
   DboxMain dbox(m_core);
-
-  std::bitset<UIInterFace::NUM_SUPPORTED> bsSupportedFunctions;
-  bsSupportedFunctions.set(UIInterFace::DATABASEMODIFIED);
-  bsSupportedFunctions.set(UIInterFace::UPDATEGUI);
-  bsSupportedFunctions.set(UIInterFace::GUIREFRESHENTRY);
-  bsSupportedFunctions.set(UIInterFace::UPDATEWIZARD);
-  bsSupportedFunctions.set(UIInterFace::UPDATEGUIGROUPS);
-
-  m_core.SetUIInterFace(&dbox, UIInterFace::NUM_SUPPORTED, bsSupportedFunctions);
 
   // Parse the command line again.  If there were errors getting the config file,
   // host or user before, then this time around we will issue messages but they

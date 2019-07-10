@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -175,7 +175,7 @@ void CAbout::CreateControls()
   wxStaticText* licenseStaticTextEnd = new wxStaticText(aboutDialog, wxID_STATIC, _("See LICENSE for open source details."), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
   rightSizer->Add(licenseStaticTextEnd, 0, wxALIGN_LEFT|wxALL, 5);
 
-  wxStaticText* copyrightStaticText = new wxStaticText(aboutDialog, wxID_STATIC, _("Copyright (c) 2003-2018 by Rony Shapiro"), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
+  wxStaticText* copyrightStaticText = new wxStaticText(aboutDialog, wxID_STATIC, _("Copyright (c) 2003-2019 Rony Shapiro"), wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
   rightSizer->Add(copyrightStaticText, 0, wxALIGN_LEFT|wxALL, 5);
 
   m_VersionStatus = new wxTextCtrl(aboutDialog, ID_TEXTCTRL, wxT("\n\n"), wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE|wxTE_READONLY|wxNO_BORDER);
@@ -393,7 +393,7 @@ wxString CAbout::GetLibCurlVersion()
 
   wxString protocols;
 
-  for (size_t i = 0; i < (sizeof(curlVersion->protocols) / sizeof(curlVersion->protocols[0])); i++) {
+  for (size_t i = 0; curlVersion->protocols[i]; i++) {
     i == 0 ? protocols = (curlVersion->protocols)[i] : protocols << ", " << (curlVersion->protocols)[i];
   }
 
@@ -644,7 +644,7 @@ wxThread::ExitCode CAbout::Entry()
  * @see method <code>CAbout::Entry()</code>
  * @see https://curl.haxx.se/libcurl/c/CURLOPT_WRITEFUNCTION.html
  */
-size_t CAbout::WriteCallback(char *receivedData, size_t size, size_t bytes, void *userData)
+size_t CAbout::WriteCallback(char *receivedData, size_t size, size_t bytes, void* WXUNUSED(userData))
 {
   size_t receivedDataSize = size * bytes;
 

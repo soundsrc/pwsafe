@@ -1,6 +1,6 @@
 /*
  * Created by Saurav Ghosh on 19/06/16.
- * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -35,6 +35,7 @@ struct Restriction {
 struct UserArgs {
   UserArgs()  { fields.set(); }
   StringX safe;
+  StringX passphrase[2];
   enum OpType {Unset, Import, Export, CreateNew, Search, Add,
                Diff, Sync, Merge} Operation{Unset};
   enum {Print, Delete, Update, ClearFields, ChangePassword} SearchAction{Print};

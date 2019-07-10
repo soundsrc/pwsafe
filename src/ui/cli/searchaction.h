@@ -1,6 +1,6 @@
 /*
  * Created by Saurav Ghosh on 19/06/16.
- * Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+ * Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
  * All rights reserved. Use of the code is allowed under the
  * Artistic License 2.0 terms, as specified in the LICENSE file
  * distributed with this code, or available from
@@ -36,25 +36,25 @@ struct SearchActionTraits<UserArgs::Print>
 template <>
 struct SearchActionTraits<UserArgs::Delete>
 {
-  static constexpr wchar_t prompt[] = L"Delete Item";
+  static constexpr wchar_t *prompt = L"Delete Item";
 };
 
 template <>
 struct SearchActionTraits<UserArgs::Update>
 {
-  static constexpr wchar_t prompt[] = L"Update Item";
+  static constexpr wchar_t *prompt = L"Update Item";
 };
 
 template <>
 struct SearchActionTraits<UserArgs::ClearFields>
 {
-  static constexpr wchar_t prompt[] = L"Clear files of item";
+  static constexpr wchar_t *prompt = L"Clear files of item";
 };
 
 template <>
 struct SearchActionTraits<UserArgs::ChangePassword>
 {
-  static constexpr wchar_t prompt[] = L"Change password of item";
+  static constexpr wchar_t *prompt = L"Change password of item";
 };
 
 #endif /* defined(__pwsafe_xcode6__searchaction__) */

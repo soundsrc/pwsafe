@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003-2018 Rony Shapiro <ronys@pwsafe.org>.
+* Copyright (c) 2003-2019 Rony Shapiro <ronys@pwsafe.org>.
 * All rights reserved. Use of the code is allowed under the
 * Artistic License 2.0 terms, as specified in the LICENSE file
 * distributed with this code, or available from
@@ -10,6 +10,8 @@
 #include "typedefs.h"
 
 namespace pws_os {
+  enum class ProcessCheckResult { ERROR_, FOUND, NOT_FOUND }; // ERROR is #defined by Windows 
+
   /**
    * getenv return environment value associated with env, empty string if
    * not defined. if is_path is true, the returned value will end with a path
@@ -20,6 +22,7 @@ namespace pws_os {
   extern stringT getusername(); // returns name of current user
   extern stringT gethostname(); // returns name of current machine
   extern stringT getprocessid();
+  extern ProcessCheckResult processExists(int pid);
 
 #if defined(_MSC_VER)
   // Windows only - MFC or wxWidgets

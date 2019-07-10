@@ -298,12 +298,14 @@
     <ClInclude Include="..\typedefs.h" />
     <ClInclude Include="..\utf8conv.h" />
     <ClInclude Include="..\UUID.h" />
+    <ClInclude Include="getopt.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="debug.cpp" />
     <ClCompile Include="dir.cpp" />
     <ClCompile Include="env.cpp" />
     <ClCompile Include="file.cpp" />
+    <ClCompile Include="getopt.c" />
     <ClCompile Include="KeySend.cpp" />
     <ClCompile Include="lib.cpp" />
     <ClCompile Include="logit.cpp" />
