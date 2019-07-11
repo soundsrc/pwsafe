@@ -45,6 +45,7 @@ class CYubiMixin {
   bool PerformChallengeResponse(wxWindow *win,
              const StringX &challenge, StringX &response,
              bool oldYubiChallenge = false);
+  static char IntToHex(unsigned int n);
   StringX Bin2Hex(const unsigned char *buf, int len) const;
 
   // Following should be called in timer event handler of mixed-in class

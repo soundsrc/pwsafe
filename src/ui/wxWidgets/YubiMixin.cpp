@@ -169,13 +169,26 @@ bool CYubiMixin::PerformChallengeResponse(wxWindow *win,
   return retval;
 }
 
+char CYubiMixin::IntToHex(unsigned int n)
+{
+  if (n < 10) return '0' + n;
+  if (n < 16) return 'a' + (n - 10);
+  return 0;
+}
+
 StringX CYubiMixin::Bin2Hex(const unsigned char *buf, int len) const
 {
-  std::wostringstream os;
-  os << std::setw(2);
-  os << std::setfill(L'0');
-  for (int i = 0; i < len; i++) {
-    os << std::hex << std::setw(2) << int(buf[i]);
+  size_t outLen = sizeof(wchar_t) * len * 2 + 1;
+  wchar_t *os = (wchar_t *)malloc(outLen);
+  int i, j;
+  for (i = 0, j = 0; i < len; i++, j += 2) {
+    os[j] = IntToHex(buf[i] >> 4);
+    os[j + 1] = IntToHex(buf[i] & 0xF);
   }
-  return StringX(os.str().c_str());
+  os[j] = 0;
+
+  StringX ret(os);
+  trashMemory(os, outLen);
+  free(os);
+  return ret;
 }
