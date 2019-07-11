@@ -26,6 +26,7 @@
 		354B08E01D32364900DA637B /* YubiMixin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 354B08DA1D3235C400DA637B /* YubiMixin.cpp */; };
 		354B08E11D32364C00DA637B /* yubicfg.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 354B08D81D3235C400DA637B /* yubicfg.cpp */; };
 		354B08E51D3236AC00DA637B /* PWYubi.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 354B08E21D3236A500DA637B /* PWYubi.cpp */; };
+		35F265AB22D6E41B0033324F /* screenlock.mm in Sources */ = {isa = PBXBuildFile; fileRef = 35F265AA22D6E41B0033324F /* screenlock.mm */; };
 		6FF5D4A11DA14EE80032F5B6 /* passwordsubset.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6FF5D49D1DA14AB20032F5B6 /* passwordsubset.cpp */; };
 		A2D181461C8FF86C0018AE03 /* media.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A2D181451C8FF86C0018AE03 /* media.cpp */; };
 		A2FE25801C5ACEFD00210C36 /* AES.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A2FE257E1C5ACEFD00210C36 /* AES.cpp */; };
@@ -253,6 +254,8 @@
 		354B08DE1D32363C00DA637B /* Yubikey-button.xpm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = "Yubikey-button.xpm"; path = "../src/ui/wxWidgets/graphics/Yubikey-button.xpm"; sourceTree = "<group>"; };
 		354B08E21D3236A500DA637B /* PWYubi.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = PWYubi.cpp; path = ../src/os/unix/PWYubi.cpp; sourceTree = "<group>"; };
 		354B08E31D3236A500DA637B /* PWYubi.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = PWYubi.h; path = ../src/os/unix/PWYubi.h; sourceTree = "<group>"; };
+		35F265AA22D6E41B0033324F /* screenlock.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = screenlock.mm; sourceTree = "<group>"; };
+		35F265AC22D6E4380033324F /* screenlock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = screenlock.h; sourceTree = "<group>"; };
 		6FF5D49D1DA14AB20032F5B6 /* passwordsubset.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = passwordsubset.cpp; sourceTree = "<group>"; };
 		6FF5D49E1DA14AB20032F5B6 /* passwordsubset.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = passwordsubset.h; sourceTree = "<group>"; };
 		A2D181451C8FF86C0018AE03 /* media.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = media.cpp; sourceTree = "<group>"; };
@@ -1328,6 +1331,8 @@
 		E6C1253511E1B2BA00D22D92 /* mac */ = {
 			isa = PBXGroup;
 			children = (
+				35F265AC22D6E4380033324F /* screenlock.h */,
+				35F265AA22D6E41B0033324F /* screenlock.mm */,
 				A2D181451C8FF86C0018AE03 /* media.cpp */,
 				E6C6876D137C406300A916C1 /* UUID.cpp */,
 				E6C1255911E1B35600D22D92 /* macsendstring.cpp */,
@@ -1774,6 +1779,7 @@
 				E6EE845111E87E9800B01518 /* XFilterXMLProcessor.cpp in Sources */,
 				A2FE25901C5ACF7500210C36 /* pbkdf2.cpp in Sources */,
 				E6EE845211E87E9800B01518 /* XSecMemMgr.cpp in Sources */,
+				35F265AB22D6E41B0033324F /* screenlock.mm in Sources */,
 				E0A70B9821C8FF8900A2FEA8 /* PolicyManager.cpp in Sources */,
 				E6EE845311E87E9800B01518 /* XMLFileHandlers.cpp in Sources */,
 				E6EE845411E87E9800B01518 /* XMLFileValidation.cpp in Sources */,

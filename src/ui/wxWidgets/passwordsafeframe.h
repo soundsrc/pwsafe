@@ -410,6 +410,7 @@ public:
   
 #ifdef __WXOSX__
   void OnActivate(wxActivateEvent& event);
+  void OnLockScreen();
 #endif
 
   void OnPasswordSubset(wxCommandEvent& evt);

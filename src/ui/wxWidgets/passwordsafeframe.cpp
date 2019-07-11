@@ -34,6 +34,9 @@
 #include "core/XML/XMLDefs.h"  // Required if testing "USE_XML_LIBRARY"
 #include "os/file.h"
 #include "os/sleep.h"
+#ifdef __WXOSX__
+#include "os/mac/screenlock.h"
+#endif
 
 #include "about.h"
 #include "PWSgrid.h"
@@ -345,6 +348,11 @@ PasswordSafeFrame::~PasswordSafeFrame()
 {
 ////@begin PasswordSafeFrame destruction
 ////@end PasswordSafeFrame destruction
+
+#ifdef __WXOSX__
+  pws_os::MacFinalizeScreenLockListener();
+#endif
+
   delete m_search;
   m_search = 0;
 
@@ -373,6 +381,9 @@ void PasswordSafeFrame::Init()
   m_statusBar = nullptr;
 ////@end PasswordSafeFrame member initialisation
   RegisterLanguageMenuItems();
+#ifdef __WXOSX__
+  pws_os::MacInitializeScreenLockListener([this]() { OnLockScreen(); });
+#endif
 }
 
 /**
@@ -3495,6 +3506,11 @@ void PasswordSafeFrame::OnActivate(wxActivateEvent& event)
       UnlockSafe(true, false);
     }
   }
+}
+
+void PasswordSafeFrame::OnLockScreen()
+{
+  IconizeOrHideAndLock();
 }
 #endif
 
